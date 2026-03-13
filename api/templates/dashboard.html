@@ -586,7 +586,7 @@
     list.innerHTML = subs.map(s => {
       const id = escapeHtml(s.id);
       const fullName = escapeHtml(`${s.slug}.${s.domain}`);
-      const originText = s.origin_host ? `${escapeHtml(s.origin_host)}:${escapeHtml(String(s.origin_port))}` : 'No origin configured';
+      const originText = s.origin_host ? `${escapeHtml(s.origin_host)}:${escapeHtml(s.origin_port)}` : 'No origin configured';
       const originButtonLabel = s.origin_host ? 'Edit origin' : 'Set origin';
       return `
         <li class="app-card-muted px-3 py-3 space-y-3">
