@@ -3,25 +3,28 @@
 {% block content %}
 <div class="space-y-6">
   <div class="flex items-center justify-between">
-    <h1 class="text-2xl font-semibold">Manage user</h1>
+    <h1 class="text-2xl font-semibold">User management</h1>
     <a href="/admin"
        class="text-sm text-gray-400 hover:text-white border border-gray-700 rounded-lg px-3 py-1.5">
       Back to admin
     </a>
   </div>
 
-  <section class="bg-gray-900 rounded-xl p-5 border border-gray-800 space-y-4">
-    <div class="flex items-start justify-between gap-4">
-      <div>
-        <p id="user-email" class="text-lg font-medium break-all">{{ target_user.email }}</p>
-        <p class="text-xs text-gray-500 mt-1">
+  <section class="bg-gray-900 rounded-xl p-6 border border-gray-800 space-y-6">
+    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+      <div class="space-y-1">
+        <p id="user-email" class="text-xl font-semibold break-all">{{ target_user.email }}</p>
+        <p class="text-xs text-gray-500">
           Joined <span id="user-joined">{{ target_user.created_at }}</span>
         </p>
       </div>
-      <span id="user-status" class="text-xs px-2 py-1 rounded-full"></span>
+      <div class="inline-flex items-center gap-2">
+        <span class="text-xs text-gray-500">Status</span>
+        <span id="user-status" class="inline-flex items-center text-xs px-2.5 py-1 rounded-full border"></span>
+      </div>
     </div>
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <label class="text-sm text-gray-300">
         Role
         <select id="user-role"
@@ -31,28 +34,35 @@
           <option value="admin">Admin</option>
         </select>
       </label>
-      <label class="text-sm text-gray-300 flex items-center gap-2 mt-6 sm:mt-0">
-        <input id="user-active" type="checkbox" class="h-4 w-4 rounded border-gray-600 bg-gray-800 text-indigo-600">
-        Active account
-      </label>
+      <div class="rounded-lg border border-gray-800 bg-gray-950/40 px-4 py-3">
+        <label class="text-sm text-gray-300 flex items-center gap-2">
+          <input id="user-active" type="checkbox" class="h-4 w-4 rounded border-gray-600 bg-gray-800 text-indigo-600">
+          Active account
+        </label>
+        <p class="text-xs text-gray-500 mt-2">Disabled accounts cannot sign in or use API tokens.</p>
+      </div>
     </div>
 
-    <p id="user-note" class="text-xs text-gray-500 hidden"></p>
-    <p id="user-msg" class="text-sm hidden"></p>
+    <p id="user-note" class="hidden text-xs rounded-lg border border-yellow-900/60 bg-yellow-950/30 px-3 py-2 text-yellow-200"></p>
+    <p id="user-msg" class="hidden text-sm rounded-lg px-3 py-2"></p>
 
-    <div class="flex flex-wrap items-center gap-3">
+    <div class="flex flex-wrap items-center gap-3 pt-2 border-t border-gray-800">
       <button onclick="saveUser()"
         class="bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-4 py-2 text-sm">
         Save changes
       </button>
       <button onclick="resetPassword()"
-        class="bg-yellow-700 hover:bg-yellow-600 text-yellow-100 rounded-lg px-4 py-2 text-sm">
+        class="bg-gray-800 hover:bg-gray-700 text-gray-100 rounded-lg px-4 py-2 text-sm">
         Reset password
       </button>
       <button id="toggle-active-btn" onclick="toggleActive()"
         class="bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg px-4 py-2 text-sm">
         Deactivate user
       </button>
+    </div>
+
+    <div class="rounded-lg border border-red-900/50 bg-red-950/20 px-4 py-3 space-y-3">
+      <p class="text-xs text-red-200">Danger zone. This permanently removes the user and related records.</p>
       <button id="delete-user-btn" onclick="deleteUser()"
         class="bg-red-800 hover:bg-red-700 text-red-100 rounded-lg px-4 py-2 text-sm">
         Delete user
@@ -82,8 +92,22 @@
   function showMessage(text, type = 'error') {
     const el = document.getElementById('user-msg');
     el.textContent = text;
-    el.classList.remove('hidden', 'text-red-400', 'text-green-400');
-    el.classList.add(type === 'success' ? 'text-green-400' : 'text-red-400');
+    el.classList.remove(
+      'hidden',
+      'text-red-300',
+      'text-green-300',
+      'bg-red-950/30',
+      'bg-green-950/30',
+      'border',
+      'border-red-900/50',
+      'border-green-900/50',
+    );
+    el.classList.add('border');
+    if (type === 'success') {
+      el.classList.add('text-green-300', 'bg-green-950/30', 'border-green-900/50');
+    } else {
+      el.classList.add('text-red-300', 'bg-red-950/30', 'border-red-900/50');
+    }
   }
 
   async function api(path, opts = {}) {
@@ -114,7 +138,7 @@
 
     const status = document.getElementById('user-status');
     status.textContent = user.active ? 'active' : 'inactive';
-    status.className = `text-xs px-2 py-1 rounded-full ${user.active ? 'bg-green-900/60 text-green-300' : 'bg-gray-800 text-gray-400'}`;
+    status.className = `inline-flex items-center text-xs px-2.5 py-1 rounded-full border ${user.active ? 'bg-green-900/40 text-green-300 border-green-800' : 'bg-gray-800 text-gray-300 border-gray-700'}`;
 
     const note = document.getElementById('user-note');
     const isSelf = TARGET_USER_ID === CURRENT_ADMIN_ID;
@@ -129,9 +153,9 @@
       activeInput.disabled = true;
       toggleBtn.disabled = true;
       toggleBtn.classList.add('opacity-50', 'cursor-not-allowed');
+      deleteBtn.disabled = true;
+      deleteBtn.classList.add('opacity-50', 'cursor-not-allowed');
       if (isSelf) {
-        deleteBtn.disabled = true;
-        deleteBtn.classList.add('opacity-50', 'cursor-not-allowed');
         note.textContent = 'You cannot deactivate or delete your own account.';
       } else {
         note.textContent = 'Admin account cannot be deactivated or deleted.';
@@ -146,6 +170,12 @@
     }
 
     toggleBtn.textContent = user.active ? 'Deactivate user' : 'Reactivate user';
+    toggleBtn.classList.remove('bg-yellow-700', 'hover:bg-yellow-600', 'text-yellow-100', 'bg-green-700', 'hover:bg-green-600', 'text-green-100');
+    if (user.active) {
+      toggleBtn.classList.add('bg-yellow-700', 'hover:bg-yellow-600', 'text-yellow-100');
+    } else {
+      toggleBtn.classList.add('bg-green-700', 'hover:bg-green-600', 'text-green-100');
+    }
 
     const creditsSection = document.getElementById('credits-section');
     if (user.role === 'admin') {
