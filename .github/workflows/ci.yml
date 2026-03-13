@@ -64,18 +64,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build API image
-        uses: docker/build-push-action@v6
-        with:
-          context: api
-          file: api/Dockerfile
-          push: false
-          tags: arcus-api:ci
+        run: docker build -t arcus-api:ci api/
 
       - name: Build Router image
-        uses: docker/build-push-action@v6
-        with:
-          context: router
-          file: router/Dockerfile
-          push: false
-          tags: arcus-router:ci
+        run: docker build -t arcus-router:ci router/
