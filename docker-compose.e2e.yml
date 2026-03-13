@@ -1,0 +1,78 @@
+# docker-compose.e2e.yml
+#
+# Runs the full end-to-end test suite against a real PostgreSQL instance.
+# This complements the in-memory SQLite tests and verifies the application
+# behaves correctly with the production-equivalent database.
+#
+# Usage:
+#   docker compose -f docker-compose.e2e.yml up --build --abort-on-container-exit
+#   docker compose -f docker-compose.e2e.yml down -v
+#
+# Exit code of the `e2e-tests` container reflects test success/failure.
+
+services:
+
+  # -------------------------------------------------------------------------
+  # PostgreSQL (ephemeral – no named volume, wiped on `down -v`)
+  # -------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: arcus
+      POSTGRES_USER: arcus
+      POSTGRES_PASSWORD: arcus_e2e
+    volumes:
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U arcus -d arcus"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - e2e
+
+  # -------------------------------------------------------------------------
+  # API service (production image, no Traefik/Cloudflare)
+  # -------------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+asyncpg://arcus:arcus_e2e@postgres:5432/arcus
+      JWT_SECRET_KEY: e2e_test_jwt_secret_key_not_for_production
+      API_SECRET_KEY: e2e_test_api_secret
+      CLOUDFLARE_API_TOKEN: ""
+      CLOUDFLARE_ZONE_ID: ""
+      BASE_DOMAIN: localhost
+      # Disable email sending in tests
+      SMTP_HOST: ""
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks:
+      - e2e
+
+  # -------------------------------------------------------------------------
+  # E2E test runner
+  # -------------------------------------------------------------------------
+  e2e-tests:
+    build:
+      context: .
+      dockerfile: e2e/Dockerfile
+    environment:
+      API_URL: http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - e2e
+
+networks:
+  e2e:
+    driver: bridge
