@@ -10,6 +10,7 @@ Note on tests: SQLite+aiosqlite is used in the test suite for speed/portability.
 """
 
 import asyncio
+import json
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -29,6 +30,22 @@ logger = logging.getLogger(__name__)
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://arcus:arcus@postgres:5432/arcus")
 BASE_DOMAIN = os.getenv("BASE_DOMAIN", "bigalan.dev")
 
+
+def _load_configured_domains() -> list[str]:
+    """Return the list of managed domains.
+
+    Reads from the DOMAINS env var (JSON array of objects with a "domain" key)
+    when set; falls back to BASE_DOMAIN for single-domain deployments.
+    """
+    domains_json = os.getenv("DOMAINS", "").strip()
+    if domains_json:
+        parsed: list[dict] = json.loads(domains_json)
+        return [d["domain"] for d in parsed]
+    return [BASE_DOMAIN]
+
+
+CONFIGURED_DOMAINS: list[str] = _load_configured_domains()
+
 engine = create_async_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
@@ -43,7 +60,7 @@ _SKIP_PARAM  = "_arcus_skip"
 async def lifespan(application: FastAPI):
     global _http_client
     _http_client = httpx.AsyncClient(follow_redirects=False, timeout=_CLIENT_TIMEOUT)
-    logger.info("Router started – base domain: %s", BASE_DOMAIN)
+    logger.info("Router started – configured domains: %s", CONFIGURED_DOMAINS)
     yield
     await _http_client.aclose()
     await engine.dispose()
@@ -56,17 +73,23 @@ app = FastAPI(title="Arcus Router", lifespan=lifespan)
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _extract_slug(host: str) -> str | None:
+def _extract_slug(host: str) -> tuple[str, str] | None:
+    """Return ``(slug, domain)`` for a recognised subdomain host, else ``None``.
+
+    Checks against all configured domains so multi-domain deployments work
+    transparently.
+    """
     host = host.split(":")[0].lower().strip()
-    suffix = f".{BASE_DOMAIN}"
-    if host.endswith(suffix):
-        slug = host[: -len(suffix)]
-        if slug and "." not in slug:
-            return slug
+    for base_domain in CONFIGURED_DOMAINS:
+        suffix = f".{base_domain}"
+        if host.endswith(suffix):
+            slug = host[: -len(suffix)]
+            if slug and "." not in slug:
+                return slug, base_domain
     return None
 
 
-async def _get_origin(slug: str) -> tuple[str, int, str] | None:
+async def _get_origin(slug: str, domain: str) -> tuple[str, int, str] | None:
     """Return (origin_host, origin_port, role) or None."""
     async with SessionLocal() as session:
         result = await session.execute(
@@ -74,10 +97,10 @@ async def _get_origin(slug: str) -> tuple[str, int, str] | None:
                 "SELECT s.origin_host, s.origin_port, u.role "
                 "FROM subdomains s "
                 "JOIN users u ON u.id = s.user_id "
-                "WHERE s.slug = :slug AND s.active = TRUE "
+                "WHERE s.slug = :slug AND s.domain = :domain AND s.active = TRUE "
                 "AND s.origin_host IS NOT NULL AND s.origin_port IS NOT NULL"
             ),
-            {"slug": slug},
+            {"slug": slug, "domain": domain},
         )
         row = result.one_or_none()
     if row is None:
@@ -135,9 +158,9 @@ _INTERSTITIAL_TEMPLATE = """\
 """
 
 
-def _interstitial(slug: str) -> HTMLResponse:
+def _interstitial(slug: str, base_domain: str) -> HTMLResponse:
     html = _INTERSTITIAL_TEMPLATE.format(
-        slug=slug, base_domain=BASE_DOMAIN, skip_param=_SKIP_PARAM,
+        slug=slug, base_domain=base_domain, skip_param=_SKIP_PARAM,
     )
     return HTMLResponse(content=html, status_code=200)
 
@@ -158,12 +181,13 @@ async def health():
 @app.websocket("/{path:path}")
 async def ws_proxy(websocket: WebSocket, path: str):
     host = websocket.headers.get("host", "")
-    slug = _extract_slug(host)
-    if slug is None:
+    result = _extract_slug(host)
+    if result is None:
         await websocket.close(code=1008)
         return
 
-    row = await _get_origin(slug)
+    slug, domain = result
+    row = await _get_origin(slug, domain)
     if row is None:
         await websocket.close(code=1008)
         return
@@ -227,15 +251,16 @@ async def ws_proxy(websocket: WebSocket, path: str):
 )
 async def http_proxy(request: Request, path: str):
     host = request.headers.get("host", "")
-    slug = _extract_slug(host)
+    result = _extract_slug(host)
 
-    if slug is None:
+    if result is None:
         return JSONResponse({"detail": "Not found."}, status_code=status.HTTP_404_NOT_FOUND)
 
-    row = await _get_origin(slug)
+    slug, domain = result
+    row = await _get_origin(slug, domain)
     if row is None:
         return JSONResponse(
-            {"detail": f"No active origin configured for '{slug}.{BASE_DOMAIN}'."},
+            {"detail": f"No active origin configured for '{slug}.{domain}'."},
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
@@ -245,7 +270,7 @@ async def http_proxy(request: Request, path: str):
     skip_via_cookie = request.cookies.get(_PASS_COOKIE) == slug
 
     if role == "normal" and not skip_via_cookie and not skip_via_param:
-        return _interstitial(slug)
+        return _interstitial(slug, domain)
 
     # Strip the internal skip param before forwarding upstream.
     query_parts = [

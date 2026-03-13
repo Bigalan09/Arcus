@@ -26,6 +26,7 @@ async def test_purchase_subdomain_success(client, admin_headers):
     assert data["slug"] == "myapp"
     assert data["user_id"] == user_id
     assert data["active"] is True
+    assert "domain" in data  # domain field is present in response
 
     await client.post("/subdomains/purchase", json={"user_id": user_id, "slug": "myapp2"}, headers=admin_headers)
     await client.post("/subdomains/purchase", json={"user_id": user_id, "slug": "myapp3"}, headers=admin_headers)
@@ -209,3 +210,136 @@ async def test_delete_subdomain_forbidden_for_non_owner(client, admin_headers, n
 
     forbidden = await client.delete("/subdomains/owneronly", headers=normal_user["headers"])
     assert forbidden.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Multi-domain tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_purchase_subdomain_uses_primary_domain_by_default(client, admin_headers):
+    """When no domain is specified the primary configured domain is used."""
+    from api.config import settings
+
+    user_id = await _setup_user_with_credits(client, admin_headers, "domaindefault@example.com", 2)
+    resp = await client.post(
+        "/subdomains/purchase",
+        json={"user_id": user_id, "slug": "defaultdom"},
+        headers=admin_headers,
+    )
+    assert resp.status_code == 201
+    assert resp.json()["domain"] == settings.primary_domain
+
+
+@pytest.mark.asyncio
+async def test_purchase_subdomain_invalid_domain_rejected(client, admin_headers):
+    """Purchasing a subdomain on an unconfigured domain returns 422."""
+    user_id = await _setup_user_with_credits(client, admin_headers, "invdom@example.com", 2)
+    resp = await client.post(
+        "/subdomains/purchase",
+        json={"user_id": user_id, "slug": "invdomslug", "domain": "notconfigured.example.com"},
+        headers=admin_headers,
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_same_slug_different_domains_are_independent(client, admin_headers):
+    """The same slug can be purchased on different configured domains."""
+    import json
+    from unittest.mock import patch
+
+    from api.config import settings
+
+    two_domains_json = json.dumps([
+        {"domain": "bigalan.dev", "cloudflare_zone_id": ""},
+        {"domain": "another.dev", "cloudflare_zone_id": ""},
+    ])
+    user_id = await _setup_user_with_credits(client, admin_headers, "multidomain@example.com", 4)
+
+    with patch.object(settings, "domains", two_domains_json):
+        resp1 = await client.post(
+            "/subdomains/purchase",
+            json={"user_id": user_id, "slug": "shared", "domain": "bigalan.dev"},
+            headers=admin_headers,
+        )
+        resp2 = await client.post(
+            "/subdomains/purchase",
+            json={"user_id": user_id, "slug": "shared", "domain": "another.dev"},
+            headers=admin_headers,
+        )
+
+    assert resp1.status_code == 201
+    assert resp1.json()["domain"] == "bigalan.dev"
+    assert resp2.status_code == 201
+    assert resp2.json()["domain"] == "another.dev"
+
+
+@pytest.mark.asyncio
+async def test_check_slug_respects_domain(client, admin_headers):
+    """GET /subdomains/check uses the domain param when checking availability."""
+    import json
+    from unittest.mock import patch
+
+    from api.config import settings
+
+    two_domains_json = json.dumps([
+        {"domain": "bigalan.dev", "cloudflare_zone_id": ""},
+        {"domain": "another.dev", "cloudflare_zone_id": ""},
+    ])
+    user_id = await _setup_user_with_credits(client, admin_headers, "checkdom@example.com", 2)
+
+    with patch.object(settings, "domains", two_domains_json):
+        await client.post(
+            "/subdomains/purchase",
+            json={"user_id": user_id, "slug": "domcheck", "domain": "bigalan.dev"},
+            headers=admin_headers,
+        )
+
+        # Taken on bigalan.dev
+        r1 = await client.get("/subdomains/check?slug=domcheck&domain=bigalan.dev")
+        assert r1.status_code == 200
+        assert r1.json()["available"] is False
+        assert r1.json()["domain"] == "bigalan.dev"
+
+        # Still available on another.dev
+        r2 = await client.get("/subdomains/check?slug=domcheck&domain=another.dev")
+        assert r2.status_code == 200
+        assert r2.json()["available"] is True
+        assert r2.json()["domain"] == "another.dev"
+
+
+@pytest.mark.asyncio
+async def test_delete_subdomain_with_domain_param(client, admin_headers):
+    """DELETE /subdomains/{slug}?domain=... deletes the correct record."""
+    import json
+    from unittest.mock import patch
+
+    from api.config import settings
+
+    two_domains_json = json.dumps([
+        {"domain": "bigalan.dev", "cloudflare_zone_id": ""},
+        {"domain": "another.dev", "cloudflare_zone_id": ""},
+    ])
+    user_id = await _setup_user_with_credits(client, admin_headers, "deldomain@example.com", 4)
+
+    with patch.object(settings, "domains", two_domains_json):
+        await client.post(
+            "/subdomains/purchase",
+            json={"user_id": user_id, "slug": "delslug", "domain": "bigalan.dev"},
+            headers=admin_headers,
+        )
+        await client.post(
+            "/subdomains/purchase",
+            json={"user_id": user_id, "slug": "delslug", "domain": "another.dev"},
+            headers=admin_headers,
+        )
+
+        # Delete only the bigalan.dev one
+        resp = await client.delete("/subdomains/delslug?domain=bigalan.dev", headers=admin_headers)
+        assert resp.status_code == 204
+
+        # another.dev version still exists
+        check = await client.get("/subdomains/check?slug=delslug&domain=another.dev")
+        assert check.json()["available"] is False
+

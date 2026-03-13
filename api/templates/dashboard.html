@@ -92,9 +92,19 @@
     </div>
 
     <div id="subdomain-form" class="hidden app-card-muted p-4 space-y-3">
-      <div>
-        <label class="app-label" for="subdomain-slug">Slug</label>
-        <input id="subdomain-slug" type="text" maxlength="32" class="app-input" placeholder="3-32 chars: a-z, 0-9" oninput="onSubdomainSlugInput()" onblur="onSubdomainSlugBlur()">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="app-label" for="subdomain-slug">Slug</label>
+          <input id="subdomain-slug" type="text" maxlength="32" class="app-input" placeholder="3-32 chars: a-z, 0-9" oninput="onSubdomainSlugInput()" onblur="onSubdomainSlugBlur()">
+        </div>
+        <div>
+          <label class="app-label" for="subdomain-domain">Domain</label>
+          <select id="subdomain-domain" class="app-input" onchange="onSubdomainSlugInput()">
+            {% for d in domains %}
+            <option value="{{ d }}">{{ d }}</option>
+            {% endfor %}
+          </select>
+        </div>
       </div>
       <div id="slug-availability" class="hidden rounded-lg border border-gray-700 bg-gray-900/70 px-3 py-2 text-xs flex items-center gap-2">
         <span id="slug-availability-icon"></span>
@@ -389,7 +399,6 @@
     document.getElementById('slug-availability').classList.add('hidden');
     if (slugCheckTimer) clearTimeout(slugCheckTimer);
   }
-
   function updateSlugAvailability(state, text) {
     const panel = document.getElementById('slug-availability');
     const icon = document.getElementById('slug-availability-icon');
@@ -420,6 +429,8 @@
       return { ok: false, available: false, detail: 'Invalid slug format.' };
     }
 
+    const selectedDomain = document.getElementById('subdomain-domain')?.value || '';
+
     const now = Date.now();
     if (!force && slug === lastSlugChecked && now - lastSlugCheckAt < SLUG_CHECK_MIN_INTERVAL_MS) {
       return { ok: true, available: true, skipped: true };
@@ -430,8 +441,10 @@
       await new Promise(resolve => setTimeout(resolve, waitMs));
     }
 
-    updateSlugAvailability('loading', `Checking '${slug}'...`);
-    const r = await fetch(`/subdomains/check?slug=${encodeURIComponent(slug)}`);
+    updateSlugAvailability('loading', `Checking '${slug}.${selectedDomain}'...`);
+    const params = new URLSearchParams({ slug });
+    if (selectedDomain) params.set('domain', selectedDomain);
+    const r = await fetch(`/subdomains/check?${params}`);
     if (!r.ok) {
       updateSlugAvailability('unavailable', 'Could not verify availability.');
       return { ok: false, available: false, detail: 'Could not verify availability.' };
@@ -442,11 +455,11 @@
     lastSlugCheckAt = Date.now();
 
     if (j.available) {
-      updateSlugAvailability('available', `'${slug}' is available.`);
+      updateSlugAvailability('available', `'${slug}.${j.domain}' is available.`);
       return { ok: true, available: true };
     }
 
-    updateSlugAvailability('unavailable', `'${slug}' is taken.`);
+    updateSlugAvailability('unavailable', `'${slug}.${j.domain}' is taken.`);
     return { ok: true, available: false, detail: 'Slug is already taken.' };
   }
 
@@ -471,8 +484,9 @@
     checkSlugAvailability(slug, true);
   }
 
-  async function setOrigin(slug, originHost, originPort) {
-    const r = await api(`/subdomains/${encodeURIComponent(slug)}/origin`, {
+  async function setOrigin(slug, domain, originHost, originPort) {
+    const params = domain ? `?domain=${encodeURIComponent(domain)}` : '';
+    const r = await api(`/subdomains/${encodeURIComponent(slug)}/origin${params}`, {
       method: 'POST',
       body: JSON.stringify({ origin_host: originHost, origin_port: originPort })
     });
@@ -486,10 +500,12 @@
     const slugInput = document.getElementById('subdomain-slug');
     const hostInput = document.getElementById('subdomain-origin-host');
     const portInput = document.getElementById('subdomain-origin-port');
+    const domainSelect = document.getElementById('subdomain-domain');
 
     const slug = slugInput.value.trim().toLowerCase();
     const originHost = hostInput.value.trim();
     const originPortRaw = portInput.value.trim();
+    const selectedDomain = domainSelect?.value || '';
     slugInput.value = slug;
 
     if (!SLUG_RE.test(slug)) {
@@ -514,13 +530,16 @@
     try {
       const availability = await checkSlugAvailability(slug, true);
       if (!availability.ok || !availability.available) {
-        setAlert('subdomain-msg', availability.detail || `'${slug}' is not available.`, 'error');
+        setAlert('subdomain-msg', availability.detail || `'${slug}.${selectedDomain}' is not available.`, 'error');
         return;
       }
 
+      const purchaseBody = { user_id: USER_ID, slug };
+      if (selectedDomain) purchaseBody.domain = selectedDomain;
+
       const r = await api('/subdomains/purchase', {
         method: 'POST',
-        body: JSON.stringify({ user_id: USER_ID, slug })
+        body: JSON.stringify(purchaseBody)
       });
       if (!r) return;
       if (!r.ok) {
@@ -528,18 +547,21 @@
         return;
       }
 
+      const created = await r.json();
+      const fullName = `${created.slug}.${created.domain}`;
+
       if (originHost && originPort !== null) {
-        const originResult = await setOrigin(slug, originHost, originPort);
+        const originResult = await setOrigin(slug, created.domain, originHost, originPort);
         if (!originResult.ok) {
           hideSubdomainForm();
-          setAlert('subdomain-msg', `Subdomain '${slug}' created, but origin failed: ${originResult.detail}`, 'warning');
+          setAlert('subdomain-msg', `Subdomain '${fullName}' created, but origin failed: ${originResult.detail}`, 'warning');
           await Promise.all([loadSubdomains(), loadBalance()]);
           return;
         }
       }
 
       hideSubdomainForm();
-      setAlert('subdomain-msg', `Subdomain '${slug}' created.`, 'success');
+      setAlert('subdomain-msg', `Subdomain '${fullName}' created.`, 'success');
       await Promise.all([loadSubdomains(), loadBalance()]);
     } finally {
       ui.setButtonBusy(createBtn, false);
@@ -562,57 +584,58 @@
     }
 
     list.innerHTML = subs.map(s => {
-      const slug = escapeHtml(s.slug);
-      const originText = s.origin_host ? `${escapeHtml(s.origin_host)}:${escapeHtml(s.origin_port)}` : 'No origin configured';
+      const id = escapeHtml(s.id);
+      const fullName = escapeHtml(`${s.slug}.${s.domain}`);
+      const originText = s.origin_host ? `${escapeHtml(s.origin_host)}:${escapeHtml(String(s.origin_port))}` : 'No origin configured';
       const originButtonLabel = s.origin_host ? 'Edit origin' : 'Set origin';
       return `
         <li class="app-card-muted px-3 py-3 space-y-3">
           <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
             <div>
-              <p class="font-mono text-base">${slug}</p>
-              <p class="app-help mt-1" id="origin-text-${slug}">${originText}</p>
+              <p class="font-mono text-base">${fullName}</p>
+              <p class="app-help mt-1" id="origin-text-${id}">${originText}</p>
             </div>
             <div class="flex items-center gap-3">
-              <button type="button" onclick="toggleOriginForm('${slug}')" class="app-btn app-btn-subtle text-xs px-3 py-1.5">${originButtonLabel}</button>
-              <button type="button" onclick="deleteSubdomain('${slug}', this)" class="app-btn app-btn-danger text-xs px-3 py-1.5">Delete</button>
+              <button type="button" onclick="toggleOriginForm('${id}')" class="app-btn app-btn-subtle text-xs px-3 py-1.5">${originButtonLabel}</button>
+              <button type="button" onclick="deleteSubdomain('${escapeHtml(s.slug)}', '${escapeHtml(s.domain)}', this)" class="app-btn app-btn-danger text-xs px-3 py-1.5">Delete</button>
             </div>
           </div>
 
-          <div id="origin-form-${slug}" class="hidden app-card p-3 space-y-3">
+          <div id="origin-form-${id}" class="hidden app-card p-3 space-y-3">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label class="app-label" for="origin-host-${slug}">Origin host</label>
-                <input id="origin-host-${slug}" type="text" class="app-input" placeholder="127.0.0.1">
+                <label class="app-label" for="origin-host-${id}">Origin host</label>
+                <input id="origin-host-${id}" type="text" class="app-input" placeholder="127.0.0.1">
               </div>
               <div>
-                <label class="app-label" for="origin-port-${slug}">Origin port</label>
-                <input id="origin-port-${slug}" type="number" min="1" max="65535" class="app-input" placeholder="3000">
+                <label class="app-label" for="origin-port-${id}">Origin port</label>
+                <input id="origin-port-${id}" type="number" min="1" max="65535" class="app-input" placeholder="3000">
               </div>
             </div>
             <div class="flex flex-wrap items-center gap-2">
-              <button type="button" onclick="saveOrigin('${slug}', this)" class="app-btn app-btn-primary text-xs px-3 py-1.5">Save origin</button>
-              <button type="button" onclick="hideOriginForm('${slug}')" class="app-btn app-btn-secondary text-xs px-3 py-1.5">Cancel</button>
+              <button type="button" onclick="saveOrigin('${escapeHtml(s.slug)}', '${escapeHtml(s.domain)}', '${id}', this)" class="app-btn app-btn-primary text-xs px-3 py-1.5">Save origin</button>
+              <button type="button" onclick="hideOriginForm('${id}')" class="app-btn app-btn-secondary text-xs px-3 py-1.5">Cancel</button>
             </div>
           </div>
         </li>`;
     }).join('');
 
     for (const s of subs) {
-      const hostInput = document.getElementById(`origin-host-${s.slug}`);
-      const portInput = document.getElementById(`origin-port-${s.slug}`);
+      const hostInput = document.getElementById(`origin-host-${s.id}`);
+      const portInput = document.getElementById(`origin-port-${s.id}`);
       if (hostInput) hostInput.value = s.origin_host || '';
       if (portInput) portInput.value = s.origin_port || '';
     }
   }
 
-  function toggleOriginForm(slug) {
-    const form = document.getElementById(`origin-form-${slug}`);
+  function toggleOriginForm(id) {
+    const form = document.getElementById(`origin-form-${id}`);
     if (!form) return;
 
     const hidden = form.classList.contains('hidden');
     if (hidden) {
       form.classList.remove('hidden');
-      const input = document.getElementById(`origin-host-${slug}`);
+      const input = document.getElementById(`origin-host-${id}`);
       if (input) input.focus();
       return;
     }
@@ -620,14 +643,14 @@
     form.classList.add('hidden');
   }
 
-  function hideOriginForm(slug) {
-    const form = document.getElementById(`origin-form-${slug}`);
+  function hideOriginForm(id) {
+    const form = document.getElementById(`origin-form-${id}`);
     if (form) form.classList.add('hidden');
   }
 
-  async function saveOrigin(slug, button) {
-    const host = document.getElementById(`origin-host-${slug}`).value.trim();
-    const portRaw = document.getElementById(`origin-port-${slug}`).value.trim();
+  async function saveOrigin(slug, domain, id, button) {
+    const host = document.getElementById(`origin-host-${id}`).value.trim();
+    const portRaw = document.getElementById(`origin-port-${id}`).value.trim();
 
     if (!host || !portRaw) {
       setAlert('subdomain-msg', 'Origin host and port are required.', 'error');
@@ -642,24 +665,25 @@
 
     ui.setButtonBusy(button, true, 'Saving...');
     try {
-      const result = await setOrigin(slug, host, port);
+      const result = await setOrigin(slug, domain, host, port);
       if (!result.ok) {
         setAlert('subdomain-msg', result.detail, 'error');
         return;
       }
 
-      hideOriginForm(slug);
-      setAlert('subdomain-msg', `Origin updated for '${slug}'.`, 'success');
+      hideOriginForm(id);
+      setAlert('subdomain-msg', `Origin updated for '${slug}.${domain}'.`, 'success');
       await loadSubdomains();
     } finally {
       ui.setButtonBusy(button, false);
     }
   }
 
-  async function deleteSubdomain(slug, button) {
+  async function deleteSubdomain(slug, domain, button) {
+    const fullName = `${slug}.${domain}`;
     const confirmed = await ui.confirmAction({
       title: 'Delete subdomain',
-      message: `Delete '${slug}'?`,
+      message: `Delete '${fullName}'?`,
       confirmText: 'Delete',
       danger: true,
     });
@@ -667,14 +691,15 @@
 
     ui.setButtonBusy(button, true, 'Deleting...');
     try {
-      const r = await api(`/subdomains/${encodeURIComponent(slug)}`, { method: 'DELETE' });
+      const params = domain ? `?domain=${encodeURIComponent(domain)}` : '';
+      const r = await api(`/subdomains/${encodeURIComponent(slug)}${params}`, { method: 'DELETE' });
       if (!r) return;
       if (!r.ok && r.status !== 204) {
         setAlert('subdomain-msg', await ui.parseApiError(r, 'Could not delete subdomain.'), 'error');
         return;
       }
 
-      setAlert('subdomain-msg', `Subdomain '${slug}' deleted.`, 'success');
+      setAlert('subdomain-msg', `Subdomain '${fullName}' deleted.`, 'success');
       await Promise.all([loadSubdomains(), loadBalance()]);
     } finally {
       ui.setButtonBusy(button, false);
