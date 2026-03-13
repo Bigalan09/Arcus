@@ -47,6 +47,7 @@ services:
       CLOUDFLARE_API_TOKEN: ""
       CLOUDFLARE_ZONE_ID: ""
       BASE_DOMAIN: localhost
+      ALLOW_PRIVATE_ORIGIN_HOSTS: "true"
       # Disable email sending in tests
       SMTP_HOST: ""
     depends_on:
