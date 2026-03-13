@@ -106,6 +106,7 @@ class CreditResponse(BaseModel):
 
 class CreditRequest(BaseModel):
     user_id: uuid.UUID
+    amount: int = Field(gt=0, description="Number of credits being requested (must be positive)")
     message: str | None = Field(default=None, max_length=500, description="Optional message describing why credits are needed")
 
 

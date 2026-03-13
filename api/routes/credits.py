@@ -98,7 +98,7 @@ async def request_credits(
     result = await db.execute(select(Webhook).where(Webhook.active.is_(True)))
     webhooks = result.scalars().all()
 
-    webhook_payload = {"user_id": str(payload.user_id), "message": payload.message}
+    webhook_payload = {"user_id": str(payload.user_id), "amount": payload.amount, "message": payload.message}
     fired = await fire_webhooks(webhooks, "credit.request", webhook_payload)
 
     logger.info("Credit request from user %s – %d webhook(s) fired", payload.user_id, fired)

@@ -268,7 +268,7 @@ async def test_normal_user_full_journey(client):
     # --- request credits ---
     r = await client.post(
         "/credits/request",
-        json={"user_id": normal["id"]},
+        json={"user_id": normal["id"], "amount": 5},
         headers=nh,
     )
     assert r.status_code == 202
@@ -328,7 +328,7 @@ async def test_normal_user_cannot_request_credits_for_other_user(client):
 
     r = await client.post(
         "/credits/request",
-        json={"user_id": pro["id"]},
+        json={"user_id": pro["id"], "amount": 1},
         headers=normal["headers"],
     )
     assert r.status_code == 403
@@ -377,7 +377,7 @@ async def test_pro_user_full_journey(client):
     # --- user webhooks: create ---
     r = await client.post(
         "/webhooks",
-        json={"url": "https://myhook.example.com/events", "events": ["credit.request"], "active": True},
+        json={"url": "https://myhook.example.com/events", "events": ["user.created"], "active": True},
         headers=ph,
     )
     assert r.status_code == 201
@@ -428,7 +428,7 @@ async def test_pro_user_webhook_secret(client):
         json={
             "url": "https://signed.example.com/hook",
             "secret": "mysupersecretsigning",
-            "events": ["credit.request"],
+            "events": ["user.created"],
             "active": True,
         },
         headers=pro["headers"],
@@ -534,7 +534,7 @@ async def test_system_webhook_fires_on_credit_request(client):
     with patch("api.utils.webhooks.httpx.AsyncClient", mock_class):
         r = await client.post(
             "/credits/request",
-            json={"user_id": normal["id"]},
+            json={"user_id": normal["id"], "amount": 5},
             headers=normal["headers"],
         )
 
@@ -546,15 +546,15 @@ async def test_system_webhook_fires_on_credit_request(client):
 
 @pytest.mark.asyncio
 async def test_user_webhook_fires_on_credit_request(client):
-    """A pro-user webhook fires together with any system webhook."""
+    """A user webhook (admin-owned) fires together with any system webhook on credit.request."""
     admin_headers = await _setup_admin(client)
     pro = await _create_user_with_password(client, admin_headers, PRO_EMAIL, "pro")
 
-    # Pro user creates their own webhook
+    # Admin creates a user-scoped webhook with credit.request (only admins can do this)
     await client.post(
         "/webhooks",
         json={"url": "https://pro-hook.example.com/events", "events": ["credit.request"], "active": True},
-        headers=pro["headers"],
+        headers=admin_headers,
     )
 
     calls: list = []
@@ -562,7 +562,7 @@ async def test_user_webhook_fires_on_credit_request(client):
     with patch("api.utils.webhooks.httpx.AsyncClient", mock_class):
         r = await client.post(
             "/credits/request",
-            json={"user_id": pro["id"]},
+            json={"user_id": pro["id"], "amount": 3},
             headers=pro["headers"],
         )
 
@@ -594,7 +594,7 @@ async def test_webhook_hmac_signature(client):
     with patch("api.utils.webhooks.httpx.AsyncClient", mock_class):
         r = await client.post(
             "/credits/request",
-            json={"user_id": normal["id"]},
+            json={"user_id": normal["id"], "amount": 2},
             headers=normal["headers"],
         )
 
@@ -626,7 +626,7 @@ async def test_inactive_webhook_not_fired(client):
     with patch("api.utils.webhooks.httpx.AsyncClient", mock_class):
         r = await client.post(
             "/credits/request",
-            json={"user_id": normal["id"]},
+            json={"user_id": normal["id"], "amount": 1},
             headers=normal["headers"],
         )
 
@@ -652,7 +652,7 @@ async def test_wrong_event_webhook_not_fired(client):
     with patch("api.utils.webhooks.httpx.AsyncClient", mock_class):
         r = await client.post(
             "/credits/request",
-            json={"user_id": normal["id"]},
+            json={"user_id": normal["id"], "amount": 1},
             headers=normal["headers"],
         )
 
@@ -680,7 +680,7 @@ async def test_webhook_delivery_failure_does_not_block_response(client):
     with patch("api.utils.webhooks.httpx.AsyncClient", mock_class):
         r = await client.post(
             "/credits/request",
-            json={"user_id": normal["id"]},
+            json={"user_id": normal["id"], "amount": 1},
             headers=normal["headers"],
         )
 
@@ -710,7 +710,7 @@ async def test_multiple_webhooks_all_fire(client):
     with patch("api.utils.webhooks.httpx.AsyncClient", mock_class):
         r = await client.post(
             "/credits/request",
-            json={"user_id": normal["id"]},
+            json={"user_id": normal["id"], "amount": 3},
             headers=normal["headers"],
         )
 
@@ -736,7 +736,7 @@ async def test_webhook_payload_structure(client):
     with patch("api.utils.webhooks.httpx.AsyncClient", mock_class):
         r = await client.post(
             "/credits/request",
-            json={"user_id": normal["id"], "message": "need more credits"},
+            json={"user_id": normal["id"], "amount": 10, "message": "need more credits"},
             headers=normal["headers"],
         )
 
@@ -747,6 +747,7 @@ async def test_webhook_payload_structure(client):
     assert payload["event"] == "credit.request"
     assert "fired_at" in payload
     assert payload["data"]["user_id"] == normal["id"]
+    assert payload["data"]["amount"] == 10
     assert payload["data"]["message"] == "need more credits"
 
 
@@ -1164,7 +1165,7 @@ async def test_user_webhooks_are_isolated(client):
     # pro1 creates a webhook
     r = await client.post(
         "/webhooks",
-        json={"url": "https://pro1.example.com/hook", "events": ["credit.request"], "active": True},
+        json={"url": "https://pro1.example.com/hook", "events": ["user.created"], "active": True},
         headers=pro1["headers"],
     )
     assert r.status_code == 201
@@ -1198,7 +1199,7 @@ async def test_admin_cannot_modify_user_webhook_via_admin_endpoint(client):
     # Pro creates user webhook
     r = await client.post(
         "/webhooks",
-        json={"url": "https://user.example.com/hook", "events": ["credit.request"], "active": True},
+        json={"url": "https://user.example.com/hook", "events": ["user.created"], "active": True},
         headers=pro["headers"],
     )
     wh_id = r.json()["id"]

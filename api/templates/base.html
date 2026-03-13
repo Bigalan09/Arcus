@@ -7,10 +7,11 @@
   <link rel="stylesheet" href="/static/tailwind.css">
 </head>
 <body class="bg-gray-950 text-gray-100 min-h-screen">
-  <nav class="border-b border-gray-800 px-4 py-3 flex items-center justify-between">
+    <nav class="border-b border-gray-800 px-4 py-3 flex items-center justify-between">
     <a href="/" class="text-lg font-bold text-indigo-400 tracking-tight">Arcus</a>
     {% if user %}
     <div class="flex items-center gap-4">
+      <a href="/docs" target="_blank" class="text-sm text-gray-400 hover:text-white">API Docs</a>
       <span class="text-sm text-gray-400">{{ user.email }}</span>
       {% if user.role == 'admin' %}
       <a href="/admin" class="text-sm text-gray-300 hover:text-white">Admin</a>
