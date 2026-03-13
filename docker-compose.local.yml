@@ -1,0 +1,8 @@
+services:
+  api:
+    ports:
+      - "8000:8000"
+
+  router:
+    ports:
+      - "8001:8001"
