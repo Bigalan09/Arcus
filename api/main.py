@@ -3,7 +3,6 @@
 import logging
 
 from fastapi import FastAPI
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 
 from api.routes import admin, credits, subdomains, users

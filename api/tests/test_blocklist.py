@@ -1,6 +1,5 @@
 """RED tests for the admin blocklist CRUD endpoints."""
 
-import io
 import os
 
 import pytest

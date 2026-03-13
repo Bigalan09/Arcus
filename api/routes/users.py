@@ -41,6 +41,6 @@ async def create_user(payload: UserCreate, db: AsyncSession = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="A user with that e-mail address already exists.",
-        )
+        ) from None
     logger.info("Created user %s (%s, role=%s)", user.id, user.email, user.role)
     return user

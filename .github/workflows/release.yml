@@ -1,0 +1,86 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"        # v1.2.3
+      - "v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+"  # v1.2.3-rc.1
+
+permissions:
+  contents: write       # create GitHub releases
+  packages: write       # push to GHCR
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Build & push Docker images to GitHub Container Registry
+  # ---------------------------------------------------------------------------
+  docker:
+    name: Build & push Docker images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata (API)
+        id: meta-api
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/arcus-api
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ !contains(github.ref, '-rc.') }}
+
+      - name: Build & push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: api/Dockerfile
+          push: true
+          tags: ${{ steps.meta-api.outputs.tags }}
+          labels: ${{ steps.meta-api.outputs.labels }}
+
+      - name: Extract Docker metadata (Router)
+        id: meta-router
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/arcus-router
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ !contains(github.ref, '-rc.') }}
+
+      - name: Build & push Router image
+        uses: docker/build-push-action@v6
+        with:
+          context: router
+          file: router/Dockerfile
+          push: true
+          tags: ${{ steps.meta-router.outputs.tags }}
+          labels: ${{ steps.meta-router.outputs.labels }}
+
+  # ---------------------------------------------------------------------------
+  # Create GitHub Release with auto-generated notes
+  # ---------------------------------------------------------------------------
+  github-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: docker
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so release notes span all commits
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref, '-rc.') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

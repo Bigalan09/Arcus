@@ -7,16 +7,16 @@ be tested without a real PostgreSQL instance or upstream origin server.
 import os
 import uuid
 
-import pytest
 import pytest_asyncio
 
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 os.environ.setdefault("BASE_DOMAIN", "thesoftware.dev")
 
+from unittest.mock import AsyncMock
+
 from httpx import ASGITransport, AsyncClient, Response
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from unittest.mock import AsyncMock
 
 import router.main as router_module
 from router.main import app

@@ -43,7 +43,7 @@ async def purchase_subdomain(payload: SubdomainPurchase, db: AsyncSession = Depe
         await check_slug(payload.slug, db)
     except ValueError as exc:
         await db.rollback()
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
     subdomain = Subdomain(user_id=payload.user_id, slug=payload.slug)
     db.add(subdomain)
@@ -56,7 +56,7 @@ async def purchase_subdomain(payload: SubdomainPurchase, db: AsyncSession = Depe
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"The subdomain '{payload.slug}' is already taken.",
-        )
+        ) from None
 
     logger.info("User %s purchased subdomain '%s'", payload.user_id, payload.slug)
 
@@ -79,7 +79,7 @@ async def set_origin(slug: str, payload: OriginSet, db: AsyncSession = Depends(g
     try:
         validated_host = validate_origin_host(payload.origin_host)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
     subdomain.origin_host = validated_host
     subdomain.origin_port = payload.origin_port

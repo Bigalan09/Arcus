@@ -9,22 +9,22 @@ or transaction isolation semantics.  For full integration coverage, run the stac
 with ``docker compose up`` and point DATABASE_URL at a real PostgreSQL instance.
 """
 
-import pytest
-import pytest_asyncio
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-
 # ---------------------------------------------------------------------------
 # Override the database URL *before* any application module is loaded so that
 # the engine that ``database.py`` creates points at SQLite.
 # ---------------------------------------------------------------------------
 import os
+
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 os.environ.setdefault("CLOUDFLARE_API_TOKEN", "")
 os.environ.setdefault("CLOUDFLARE_ZONE_ID", "")
 
 from api.database import Base, get_db  # noqa: E402 – must come after env override
-from api.main import app               # noqa: E402
+from api.main import app  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Build a fresh in-process engine for every test session

@@ -70,6 +70,6 @@ def validate_origin_host(host: str) -> str:
                 )
     except OSError:
         # Cannot resolve – reject to be safe.
-        raise ValueError(f"The hostname '{host}' could not be resolved.")
+        raise ValueError(f"The hostname '{host}' could not be resolved.") from None
 
     return host
