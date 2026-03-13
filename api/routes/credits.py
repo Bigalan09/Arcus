@@ -33,8 +33,18 @@ async def get_credits(
         target = await db.get(User, user_id)
         if target is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+        if target.role == "admin":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Admin accounts do not use credits.",
+            )
         target_id = user_id
     else:
+        if user.role == "admin":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Admin accounts do not use credits.",
+            )
         target_id = user.id
 
     result = await db.execute(select(Credit).where(Credit.user_id == target_id))
@@ -62,6 +72,11 @@ async def grant_credits(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found.",
         )
+    if target_user.role == "admin":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Admin accounts do not use credits.",
+        )
 
     result = await db.execute(select(Credit).where(Credit.user_id == payload.user_id))
     credit = result.scalar_one_or_none()
@@ -85,6 +100,12 @@ async def request_credits(
     db: AsyncSession = Depends(get_db),
 ):
     """Request additional credits (fires registered webhooks)."""
+    if user.role == "admin":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Admin accounts do not request credits.",
+        )
+
     if user.role != "admin" and payload.user_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -94,6 +115,11 @@ async def request_credits(
     target = await db.get(User, payload.user_id)
     if target is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    if target.role == "admin":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Admin accounts do not request credits.",
+        )
 
     result = await db.execute(select(Webhook).where(Webhook.active.is_(True)))
     webhooks = result.scalars().all()

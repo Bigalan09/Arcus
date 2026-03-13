@@ -39,8 +39,9 @@ async def create_user(
     db.add(user)
     try:
         await db.flush()
-        credit = Credit(user_id=user.id, balance=0)
-        db.add(credit)
+        if payload.role != "admin":
+            credit = Credit(user_id=user.id, balance=0)
+            db.add(credit)
         await db.commit()
         await db.refresh(user)
     except IntegrityError:

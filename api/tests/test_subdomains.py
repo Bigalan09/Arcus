@@ -45,6 +45,22 @@ async def test_purchase_subdomain_no_credits(client, admin_headers):
 
 
 @pytest.mark.asyncio
+async def test_admin_purchase_is_unlimited(client, admin_headers):
+    """Admin users can purchase subdomains without credits."""
+    me = await client.get("/auth/me", headers=admin_headers)
+    assert me.status_code == 200
+    admin_id = me.json()["id"]
+
+    first = await client.post("/subdomains/purchase", json={"user_id": admin_id, "slug": "admone"}, headers=admin_headers)
+    second = await client.post("/subdomains/purchase", json={"user_id": admin_id, "slug": "admtwo"}, headers=admin_headers)
+    third = await client.post("/subdomains/purchase", json={"user_id": admin_id, "slug": "admthree"}, headers=admin_headers)
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert third.status_code == 201
+
+
+@pytest.mark.asyncio
 async def test_purchase_subdomain_duplicate_slug(client, admin_headers):
     """Purchasing an already-taken slug returns 409."""
     user_id = await _setup_user_with_credits(client, admin_headers, "dup@example.com", 5)
@@ -160,3 +176,36 @@ async def test_list_subdomains_empty(client, admin_headers):
     resp = await client.get(f"/subdomains?user_id={user_id}", headers=admin_headers)
     assert resp.status_code == 200
     assert resp.json() == []
+
+
+# ---------------------------------------------------------------------------
+# DELETE /subdomains/{slug}
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_delete_subdomain_success(client, admin_headers):
+    user_id = await _setup_user_with_credits(client, admin_headers, "delete@example.com", 2)
+    created = await client.post("/subdomains/purchase", json={"user_id": user_id, "slug": "deleteone"}, headers=admin_headers)
+    assert created.status_code == 201
+
+    deleted = await client.delete("/subdomains/deleteone", headers=admin_headers)
+    assert deleted.status_code == 204
+
+    listed = await client.get(f"/subdomains?user_id={user_id}", headers=admin_headers)
+    assert listed.status_code == 200
+    assert "deleteone" not in [s["slug"] for s in listed.json()]
+
+
+@pytest.mark.asyncio
+async def test_delete_subdomain_forbidden_for_non_owner(client, admin_headers, normal_user):
+    owner_id = await _setup_user_with_credits(client, admin_headers, "owner-sub@example.com", 2)
+    created = await client.post(
+        "/subdomains/purchase",
+        json={"user_id": owner_id, "slug": "owneronly"},
+        headers=admin_headers,
+    )
+    assert created.status_code == 201
+
+    forbidden = await client.delete("/subdomains/owneronly", headers=normal_user["headers"])
+    assert forbidden.status_code == 403

@@ -20,6 +20,7 @@ class UserResponse(BaseModel):
     id: uuid.UUID
     email: str
     role: str
+    active: bool
     must_change_password: bool
     created_at: datetime
 
@@ -86,6 +87,11 @@ class AdminUserCreate(BaseModel):
 
 class AdminUserResponse(UserResponse):
     pass
+
+
+class AdminUserUpdate(BaseModel):
+    role: UserRole | None = None
+    active: bool | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -184,6 +190,7 @@ class BlocklistImportResult(BaseModel):
 
 class WebhookCreate(BaseModel):
     url: HttpUrl
+    reference: str | None = Field(default=None, min_length=1, max_length=64, description="Optional unique reference tag")
     secret: str | None = Field(default=None, description="Optional HMAC-SHA256 signing secret")
     events: list[str] = Field(default=["credit.request"], description="List of event types this webhook subscribes to")
     active: bool = True
@@ -191,6 +198,7 @@ class WebhookCreate(BaseModel):
 
 class WebhookUpdate(BaseModel):
     url: HttpUrl | None = None
+    reference: str | None = Field(default=None, min_length=1, max_length=64)
     secret: str | None = None
     events: list[str] | None = None
     active: bool | None = None
@@ -199,6 +207,7 @@ class WebhookUpdate(BaseModel):
 class WebhookResponse(BaseModel):
     id: uuid.UUID
     url: str
+    reference: str | None
     events: list[str]
     active: bool
     created_at: datetime
@@ -212,3 +221,8 @@ class WebhookResponse(BaseModel):
             return [e.strip() for e in v.split(",") if e.strip()]
         return list(v)  # type: ignore[arg-type]
 
+
+class WebhookEventOption(BaseModel):
+    key: str
+    label: str
+    admin_only: bool = False

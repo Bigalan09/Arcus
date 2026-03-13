@@ -1,5 +1,7 @@
 """Tests for API token management endpoints."""
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 
 # ---------------------------------------------------------------------------
@@ -156,3 +158,29 @@ async def test_api_token_authenticates_requests(client, admin_headers):
     me_resp = await client.get("/auth/me", headers=api_headers)
     assert me_resp.status_code == 200
     assert me_resp.json()["role"] == "admin"
+
+
+@pytest.mark.asyncio
+async def test_expired_api_token_is_rejected(client, admin_headers):
+    """API tokens older than 90 days cannot authenticate."""
+    create_resp = await client.post("/tokens", json={"name": "expiring-key"}, headers=admin_headers)
+    assert create_resp.status_code == 201
+    raw_token = create_resp.json()["token"]
+    token_id = create_resp.json()["id"]
+
+    import uuid
+
+    from sqlalchemy import select
+
+    from api.models import ApiToken
+    from api.tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as session:
+        result = await session.execute(select(ApiToken).where(ApiToken.id == uuid.UUID(token_id)))
+        tok = result.scalar_one()
+        tok.created_at = datetime.now(UTC) - timedelta(days=91)
+        await session.commit()
+
+    api_headers = {"Authorization": f"Bearer {raw_token}"}
+    me_resp = await client.get("/auth/me", headers=api_headers)
+    assert me_resp.status_code == 401

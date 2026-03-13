@@ -21,12 +21,12 @@ import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.database import get_db
 from api.models import User, Webhook
-from api.schemas import WebhookCreate, WebhookResponse, WebhookUpdate
+from api.schemas import WebhookCreate, WebhookEventOption, WebhookResponse, WebhookUpdate
 from api.utils.deps import require_admin, require_pro_or_admin
 
 logger = logging.getLogger(__name__)
@@ -34,6 +34,70 @@ router = APIRouter(tags=["webhooks"])
 
 # Events that only admins may subscribe to on user-owned webhooks
 ADMIN_ONLY_EVENTS: frozenset[str] = frozenset({"credit.request"})
+
+WEBHOOK_EVENTS: tuple[WebhookEventOption, ...] = (
+    WebhookEventOption(key="credit.request", label="Credit Request", admin_only=True),
+    WebhookEventOption(key="user.created", label="User Created", admin_only=False),
+    WebhookEventOption(key="subdomain.purchased", label="Subdomain Purchased", admin_only=False),
+    WebhookEventOption(key="subdomain.deleted", label="Subdomain Deleted", admin_only=False),
+    WebhookEventOption(key="subdomain.origin.updated", label="Subdomain Origin Updated", admin_only=False),
+)
+WEBHOOK_EVENT_KEYS: frozenset[str] = frozenset(ev.key for ev in WEBHOOK_EVENTS)
+
+
+def _normalise_reference(reference: str | None) -> str | None:
+    if reference is None:
+        return None
+    ref = reference.strip()
+    return ref or None
+
+
+def _validate_events(events: list[str]) -> list[str]:
+    cleaned = []
+    seen: set[str] = set()
+    for event in events:
+        key = event.strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(key)
+    if not cleaned:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="At least one event is required.")
+    invalid = [e for e in cleaned if e not in WEBHOOK_EVENT_KEYS]
+    if invalid:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Unsupported event(s): {', '.join(sorted(invalid))}.",
+        )
+    return cleaned
+
+
+async def _ensure_reference_unique(
+    *,
+    db: AsyncSession,
+    user_id: uuid.UUID | None,
+    reference: str | None,
+    exclude_id: uuid.UUID | None = None,
+) -> None:
+    if reference is None:
+        return
+
+    conditions = [Webhook.reference == reference]
+    if exclude_id is not None:
+        conditions.append(Webhook.id != exclude_id)
+
+    if user_id is None:
+        conditions.append(Webhook.user_id.is_(None))
+    else:
+        conditions.append(Webhook.user_id == user_id)
+
+    result = await db.execute(select(Webhook).where(and_(*conditions)))
+    existing = result.scalar_one_or_none()
+    if existing is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Webhook reference '{reference}' is already in use.",
+        )
 
 
 # ===========================================================================
@@ -53,6 +117,14 @@ async def list_webhooks(
     return result.scalars().all()
 
 
+@router.get("/admin/webhooks/events", response_model=list[WebhookEventOption])
+async def list_webhook_events_admin(
+    _: User = Depends(require_admin),
+):
+    """Return all supported webhook events for admin users."""
+    return list(WEBHOOK_EVENTS)
+
+
 @router.post("/admin/webhooks", response_model=WebhookResponse, status_code=status.HTTP_201_CREATED)
 async def create_webhook(
     payload: WebhookCreate,
@@ -60,9 +132,13 @@ async def create_webhook(
     _: User = Depends(require_admin),
 ):
     """Register a new system webhook."""
-    events_str = ",".join(payload.events)
+    events = _validate_events(payload.events)
+    reference = _normalise_reference(payload.reference)
+    await _ensure_reference_unique(db=db, user_id=None, reference=reference)
+    events_str = ",".join(events)
     webhook = Webhook(
         url=str(payload.url),
+        reference=reference,
         secret=payload.secret,
         events=events_str,
         active=payload.active,
@@ -102,10 +178,14 @@ async def update_webhook(
 
     if payload.url is not None:
         webhook.url = str(payload.url)
+    if payload.reference is not None:
+        reference = _normalise_reference(payload.reference)
+        await _ensure_reference_unique(db=db, user_id=None, reference=reference, exclude_id=webhook.id)
+        webhook.reference = reference
     if payload.secret is not None:
         webhook.secret = payload.secret
     if payload.events is not None:
-        webhook.events = ",".join(payload.events)
+        webhook.events = ",".join(_validate_events(payload.events))
     if payload.active is not None:
         webhook.active = payload.active
 
@@ -147,6 +227,16 @@ async def list_user_webhooks(
     return result.scalars().all()
 
 
+@router.get("/webhooks/events", response_model=list[WebhookEventOption])
+async def list_webhook_events(
+    user: User = Depends(require_pro_or_admin),
+):
+    """Return supported webhook events for the current role."""
+    if user.role == "admin":
+        return list(WEBHOOK_EVENTS)
+    return [ev for ev in WEBHOOK_EVENTS if not ev.admin_only]
+
+
 @router.post("/webhooks", response_model=WebhookResponse, status_code=status.HTTP_201_CREATED)
 async def create_user_webhook(
     payload: WebhookCreate,
@@ -154,16 +244,21 @@ async def create_user_webhook(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a webhook subscription for the current user."""
+    events = _validate_events(payload.events)
+    reference = _normalise_reference(payload.reference)
+    await _ensure_reference_unique(db=db, user_id=user.id, reference=reference)
+
     if user.role != "admin":
-        restricted = ADMIN_ONLY_EVENTS.intersection(payload.events)
+        restricted = ADMIN_ONLY_EVENTS.intersection(events)
         if restricted:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Only admins can subscribe to event(s): {', '.join(sorted(restricted))}.",
             )
-    events_str = ",".join(payload.events)
+    events_str = ",".join(events)
     webhook = Webhook(
         url=str(payload.url),
+        reference=reference,
         secret=payload.secret,
         events=events_str,
         active=payload.active,
@@ -191,8 +286,14 @@ async def update_user_webhook(
     if webhook is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Webhook not found.")
 
+    if payload.reference is not None:
+        reference = _normalise_reference(payload.reference)
+        await _ensure_reference_unique(db=db, user_id=user.id, reference=reference, exclude_id=webhook.id)
+        webhook.reference = reference
+
     if user.role != "admin" and payload.events is not None:
-        restricted = ADMIN_ONLY_EVENTS.intersection(payload.events)
+        candidate_events = _validate_events(payload.events)
+        restricted = ADMIN_ONLY_EVENTS.intersection(candidate_events)
         if restricted:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -204,7 +305,7 @@ async def update_user_webhook(
     if payload.secret is not None:
         webhook.secret = payload.secret
     if payload.events is not None:
-        webhook.events = ",".join(payload.events)
+        webhook.events = ",".join(_validate_events(payload.events))
     if payload.active is not None:
         webhook.active = payload.active
 

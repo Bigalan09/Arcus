@@ -1,6 +1,7 @@
 """Tests for admin webhook CRUD endpoints."""
 
 import uuid
+from unittest.mock import patch
 
 import pytest
 
@@ -39,6 +40,15 @@ async def test_list_webhooks_empty(client, admin_headers):
     resp = await client.get("/admin/webhooks", headers=admin_headers)
     assert resp.status_code == 200
     assert resp.json() == []
+
+
+@pytest.mark.asyncio
+async def test_list_webhook_events_for_admin(client, admin_headers):
+    resp = await client.get("/admin/webhooks/events", headers=admin_headers)
+    assert resp.status_code == 200
+    keys = [e["key"] for e in resp.json()]
+    assert "credit.request" in keys
+    assert "subdomain.purchased" in keys
 
 
 # ---------------------------------------------------------------------------
@@ -85,6 +95,23 @@ async def test_create_webhook_inactive(client, admin_headers):
     resp = await client.post("/admin/webhooks", json=payload, headers=admin_headers)
     assert resp.status_code == 201
     assert resp.json()["active"] is False
+
+
+@pytest.mark.asyncio
+async def test_create_webhook_with_reference(client, admin_headers):
+    payload = {**SAMPLE_WEBHOOK, "reference": "billing-hook"}
+    resp = await client.post("/admin/webhooks", json=payload, headers=admin_headers)
+    assert resp.status_code == 201
+    assert resp.json()["reference"] == "billing-hook"
+
+
+@pytest.mark.asyncio
+async def test_create_webhook_duplicate_reference_rejected(client, admin_headers):
+    payload = {**SAMPLE_WEBHOOK, "reference": "dup-ref"}
+    first = await client.post("/admin/webhooks", json=payload, headers=admin_headers)
+    assert first.status_code == 201
+    second = await client.post("/admin/webhooks", json=payload, headers=admin_headers)
+    assert second.status_code == 409
 
 
 # ---------------------------------------------------------------------------
@@ -261,6 +288,59 @@ async def test_pro_user_can_subscribe_to_other_events(client, pro_user):
     )
     assert resp.status_code == 201
     assert resp.json()["events"] == ["user.created"]
+
+
+@pytest.mark.asyncio
+async def test_user_webhook_duplicate_reference_rejected(client, pro_user):
+    payload = {**PRO_WEBHOOK, "reference": "events-core"}
+    first = await client.post("/webhooks", json=payload, headers=pro_user["headers"])
+    assert first.status_code == 201
+    second = await client.post("/webhooks", json=payload, headers=pro_user["headers"])
+    assert second.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_webhook_reference_header_is_sent(client, admin_headers, normal_user):
+    await client.post(
+        "/admin/webhooks",
+        json={
+            "url": "https://receiver.example.com/hook",
+            "events": ["credit.request"],
+            "active": True,
+            "reference": "credit-alerts",
+        },
+        headers=admin_headers,
+    )
+
+    calls = []
+
+    class _Resp:
+        status_code = 200
+        is_success = True
+
+    class _MockClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, url, content=None, headers=None):
+            calls.append({"url": url, "content": content, "headers": headers or {}})
+            return _Resp()
+
+    with patch("api.utils.webhooks.httpx.AsyncClient", _MockClient):
+        r = await client.post(
+            "/credits/request",
+            json={"user_id": normal_user["id"], "amount": 2},
+            headers=normal_user["headers"],
+        )
+    assert r.status_code == 202
+    assert calls
+    assert calls[0]["headers"].get("X-Arcus-Webhook-Ref") == "credit-alerts"
 
 
 @pytest.mark.asyncio

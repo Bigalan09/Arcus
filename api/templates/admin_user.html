@@ -1,0 +1,327 @@
+{% extends "base.html" %}
+{% block title %}Manage User – Arcus{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h1 class="text-2xl font-semibold">Manage user</h1>
+      <p class="app-help mt-1">Role, access, password, and credit controls.</p>
+    </div>
+    <a href="/admin" class="app-btn app-btn-subtle">Back to admin</a>
+  </div>
+
+  <section class="app-card p-5 md:p-6 space-y-6">
+    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+      <div class="space-y-1">
+        <p id="user-email" class="text-xl font-semibold break-all">{{ target_user.email }}</p>
+        <p class="text-sm text-gray-400">Joined <span id="user-joined">{{ target_user.created_at }}</span></p>
+      </div>
+      <span id="user-status" class="app-pill"></span>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div>
+        <label class="app-label" for="user-role">Role</label>
+        <select id="user-role" class="app-select">
+          <option value="normal">Normal</option>
+          <option value="pro">Pro</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+      <div class="app-card-muted px-4 py-3">
+        <label class="inline-flex items-center gap-2 text-sm text-gray-200">
+          <input id="user-active" type="checkbox" class="h-4 w-4 rounded border-gray-600 bg-gray-800 text-indigo-600">
+          Active account
+        </label>
+        <p class="app-help mt-2">Inactive users cannot sign in or use API tokens.</p>
+      </div>
+    </div>
+
+    <p id="user-note" class="hidden app-alert"></p>
+    <p id="user-msg" class="hidden app-alert"></p>
+
+    <div class="flex flex-wrap items-center gap-3 pt-2 border-t border-gray-800/80">
+      <button id="save-user-btn" type="button" onclick="saveUser()" class="app-btn app-btn-primary">Save changes</button>
+      <button id="reset-password-btn" type="button" onclick="resetPassword()" class="app-btn app-btn-secondary">Reset password</button>
+      <button id="toggle-active-btn" type="button" onclick="toggleActive()" class="app-btn app-btn-warning">Deactivate user</button>
+    </div>
+
+    <div class="rounded-lg border border-red-900/60 bg-red-950/15 px-4 py-4 space-y-3">
+      <p class="text-sm text-red-200">Danger zone: deleting removes the user and related records permanently.</p>
+      <button id="delete-user-btn" type="button" onclick="deleteUser()" class="app-btn app-btn-danger">Delete user</button>
+    </div>
+  </section>
+
+  <section id="credits-section" class="app-card p-5 md:p-6 space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 class="text-lg font-semibold">Credits</h2>
+        <p class="app-help mt-1">Admin users have unlimited credits and do not use this section.</p>
+      </div>
+      <button id="show-grant-form-btn" type="button" onclick="showGrantForm()" class="app-btn app-btn-primary">Grant credits</button>
+    </div>
+
+    <p class="text-3xl font-bold" id="credits-balance">-</p>
+
+    <div id="grant-form" class="hidden app-card-muted p-4 space-y-3">
+      <div>
+        <label class="app-label" for="grant-amount">Credits to add</label>
+        <input id="grant-amount" type="number" min="1" step="1" class="app-input" placeholder="10">
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <button id="grant-credits-btn" type="button" onclick="grantCredits()" class="app-btn app-btn-primary">Grant</button>
+        <button type="button" onclick="hideGrantForm()" class="app-btn app-btn-secondary">Cancel</button>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const TARGET_USER_ID = {{ target_user.id | string | tojson }};
+  const CURRENT_ADMIN_ID = {{ user.id | string | tojson }};
+  let currentRole = {{ target_user.role | tojson }};
+  let currentActive = {{ target_user.active | tojson }};
+
+  function setAlert(elementId, text, type = 'error') {
+    const el = document.getElementById(elementId);
+    el.textContent = text;
+    el.classList.remove('hidden', 'app-alert-info', 'app-alert-success', 'app-alert-error', 'app-alert-warning');
+    el.classList.add(`app-alert-${type}`);
+  }
+
+  function hideAlert(elementId) {
+    document.getElementById(elementId).classList.add('hidden');
+  }
+
+  async function api(path, opts = {}) {
+    const r = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+    if (r.status === 401) {
+      window.location.href = '/login';
+      return null;
+    }
+    if (r.status === 403) {
+      window.location.href = '/dashboard';
+      return null;
+    }
+    return r;
+  }
+
+  function applyUserState(user) {
+    currentRole = user.role;
+    currentActive = user.active;
+
+    document.getElementById('user-email').textContent = user.email;
+    document.getElementById('user-role').value = user.role;
+    document.getElementById('user-active').checked = user.active;
+    document.getElementById('user-joined').textContent = new Date(user.created_at).toLocaleDateString();
+
+    const status = document.getElementById('user-status');
+    status.textContent = user.active ? 'active' : 'inactive';
+    status.className = `app-pill ${user.active ? 'bg-green-900/45 border-green-800 text-green-200' : 'bg-gray-800 border-gray-700 text-gray-300'}`;
+
+    const note = document.getElementById('user-note');
+    note.classList.add('hidden');
+
+    const roleInput = document.getElementById('user-role');
+    const activeInput = document.getElementById('user-active');
+    const toggleBtn = document.getElementById('toggle-active-btn');
+    const deleteBtn = document.getElementById('delete-user-btn');
+
+    const isSelf = TARGET_USER_ID === CURRENT_ADMIN_ID;
+    const isAdminTarget = user.role === 'admin';
+
+    roleInput.disabled = false;
+    activeInput.disabled = false;
+    toggleBtn.disabled = false;
+    deleteBtn.disabled = false;
+
+    if (isSelf) {
+      activeInput.disabled = true;
+      toggleBtn.disabled = true;
+      deleteBtn.disabled = true;
+      setAlert('user-note', 'You cannot deactivate or delete your own account.', 'warning');
+    } else if (isAdminTarget) {
+      activeInput.disabled = true;
+      toggleBtn.disabled = true;
+      deleteBtn.disabled = true;
+      setAlert('user-note', 'Admin account cannot be deactivated or deleted.', 'warning');
+    }
+
+    toggleBtn.textContent = user.active ? 'Deactivate user' : 'Reactivate user';
+    toggleBtn.classList.remove('app-btn-warning', 'app-btn-secondary');
+    toggleBtn.classList.add(user.active ? 'app-btn-warning' : 'app-btn-secondary');
+
+    const creditsSection = document.getElementById('credits-section');
+    if (user.role === 'admin') {
+      creditsSection.classList.add('hidden');
+      hideGrantForm();
+    } else {
+      creditsSection.classList.remove('hidden');
+    }
+  }
+
+  async function loadUser() {
+    const r = await api(`/admin/users/${TARGET_USER_ID}`);
+    if (!r) return;
+    if (!r.ok) {
+      setAlert('user-msg', await ui.parseApiError(r, 'Failed to load user.'), 'error');
+      return;
+    }
+    const user = await r.json();
+    applyUserState(user);
+    if (user.role !== 'admin') {
+      await loadCredits();
+    }
+  }
+
+  async function loadCredits() {
+    const r = await api(`/credits?user_id=${TARGET_USER_ID}`);
+    if (!r) return;
+    if (!r.ok) {
+      document.getElementById('credits-balance').textContent = '-';
+      return;
+    }
+    const j = await r.json();
+    document.getElementById('credits-balance').textContent = j.balance;
+  }
+
+  async function saveUser() {
+    const btn = document.getElementById('save-user-btn');
+    const role = document.getElementById('user-role').value;
+    const active = document.getElementById('user-active').checked;
+
+    ui.setButtonBusy(btn, true, 'Saving...');
+    try {
+      const r = await api(`/admin/users/${TARGET_USER_ID}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ role, active })
+      });
+      if (!r) return;
+      if (!r.ok) {
+        setAlert('user-msg', await ui.parseApiError(r, 'Failed to save user changes.'), 'error');
+        return;
+      }
+      setAlert('user-msg', 'User updated.', 'success');
+      await loadUser();
+    } finally {
+      ui.setButtonBusy(btn, false);
+    }
+  }
+
+  async function toggleActive() {
+    const btn = document.getElementById('toggle-active-btn');
+    ui.setButtonBusy(btn, true, currentActive ? 'Deactivating...' : 'Reactivating...');
+    try {
+      const r = await api(`/admin/users/${TARGET_USER_ID}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ active: !currentActive })
+      });
+      if (!r) return;
+      if (!r.ok) {
+        setAlert('user-msg', await ui.parseApiError(r, 'Failed to update active state.'), 'error');
+        return;
+      }
+      setAlert('user-msg', 'User status updated.', 'success');
+      await loadUser();
+    } finally {
+      ui.setButtonBusy(btn, false);
+    }
+  }
+
+  async function resetPassword() {
+    const confirmed = await ui.confirmAction({
+      title: 'Reset password',
+      message: 'Generate a new temporary password and send it by email?',
+      confirmText: 'Reset password',
+      danger: false,
+    });
+    if (!confirmed) return;
+
+    const btn = document.getElementById('reset-password-btn');
+    ui.setButtonBusy(btn, true, 'Resetting...');
+    try {
+      const r = await api(`/admin/users/${TARGET_USER_ID}/reset-password`, { method: 'POST' });
+      if (!r) return;
+      if (!(r.ok || r.status === 204)) {
+        setAlert('user-msg', await ui.parseApiError(r, 'Failed to reset password.'), 'error');
+        return;
+      }
+      setAlert('user-msg', 'Password reset email sent.', 'success');
+    } finally {
+      ui.setButtonBusy(btn, false);
+    }
+  }
+
+  function showGrantForm() {
+    hideAlert('user-msg');
+    document.getElementById('grant-form').classList.remove('hidden');
+    document.getElementById('grant-amount').focus();
+  }
+
+  function hideGrantForm() {
+    document.getElementById('grant-form').classList.add('hidden');
+    document.getElementById('grant-amount').value = '';
+  }
+
+  async function grantCredits() {
+    const amountValue = document.getElementById('grant-amount').value.trim();
+    const amount = parseInt(amountValue, 10);
+    if (!Number.isInteger(amount) || amount <= 0) {
+      setAlert('user-msg', 'Enter a positive credit amount.', 'error');
+      return;
+    }
+
+    const btn = document.getElementById('grant-credits-btn');
+    ui.setButtonBusy(btn, true, 'Granting...');
+    try {
+      const r = await api('/credits/grant', {
+        method: 'POST',
+        body: JSON.stringify({ user_id: TARGET_USER_ID, amount })
+      });
+      if (!r) return;
+      if (!r.ok) {
+        setAlert('user-msg', await ui.parseApiError(r, 'Failed to grant credits.'), 'error');
+        return;
+      }
+      hideGrantForm();
+      setAlert('user-msg', 'Credits granted.', 'success');
+      await loadCredits();
+    } finally {
+      ui.setButtonBusy(btn, false);
+    }
+  }
+
+  async function deleteUser() {
+    if (TARGET_USER_ID === CURRENT_ADMIN_ID) {
+      setAlert('user-msg', 'You cannot delete your own account.', 'error');
+      return;
+    }
+
+    const email = document.getElementById('user-email').textContent;
+    const confirmed = await ui.confirmAction({
+      title: 'Delete user',
+      message: `Delete ${email}? This cannot be undone.`,
+      confirmText: 'Delete user',
+      danger: true,
+    });
+    if (!confirmed) return;
+
+    const btn = document.getElementById('delete-user-btn');
+    ui.setButtonBusy(btn, true, 'Deleting...');
+    try {
+      const r = await api(`/admin/users/${TARGET_USER_ID}`, { method: 'DELETE' });
+      if (!r) return;
+      if (!(r.ok || r.status === 204)) {
+        setAlert('user-msg', await ui.parseApiError(r, 'Failed to delete user.'), 'error');
+        return;
+      }
+      window.location.href = '/admin';
+    } finally {
+      ui.setButtonBusy(btn, false);
+    }
+  }
+
+  loadUser();
+</script>
+{% endblock %}

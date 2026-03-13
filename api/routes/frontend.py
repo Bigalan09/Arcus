@@ -5,6 +5,7 @@ the ``arcus_session`` cookie set by ``/auth/login``.
 """
 
 import logging
+import uuid
 
 from fastapi import APIRouter, Cookie, Depends, Request
 from fastapi.responses import RedirectResponse
@@ -126,4 +127,29 @@ async def admin_page(
         return RedirectResponse("/login", status_code=302)
     if user.role != "admin":
         return RedirectResponse("/dashboard", status_code=302)
-    return _render(request, "admin.html", user=user)
+    return _render(request, "admin.html", user=user, main_class="max-w-6xl")
+
+
+@router.get("/admin/users/{user_id}/manage")
+async def admin_user_page(
+    user_id: str,
+    request: Request,
+    arcus_session: str | None = Cookie(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user_optional(credentials=None, session_token=arcus_session, db=db)
+    if user is None:
+        return RedirectResponse("/login", status_code=302)
+    if user.role != "admin":
+        return RedirectResponse("/dashboard", status_code=302)
+
+    try:
+        target_id = uuid.UUID(user_id)
+    except ValueError:
+        return RedirectResponse("/admin", status_code=302)
+
+    target_user = await db.get(User, target_id)
+    if target_user is None:
+        return RedirectResponse("/admin", status_code=302)
+
+    return _render(request, "admin_user.html", user=user, target_user=target_user, main_class="max-w-6xl")

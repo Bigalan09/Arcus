@@ -16,14 +16,14 @@ DELETE /tokens/{id}   – revoke a token
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.database import get_db
 from api.models import ApiToken, User
 from api.schemas import ApiTokenCreate, ApiTokenCreatedResponse, ApiTokenResponse
 from api.utils.auth import generate_api_token, hash_api_token
-from api.utils.deps import API_TOKEN_LIMITS, get_current_user
+from api.utils.deps import API_TOKEN_LIMITS, api_token_cutoff, get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/tokens", tags=["tokens"])
@@ -39,11 +39,18 @@ async def create_token(
 
     The raw token is returned exactly once; only a hash is stored.
     """
+    cutoff = api_token_cutoff()
+    await db.execute(
+        delete(ApiToken).where(ApiToken.user_id == user.id, ApiToken.created_at < cutoff)
+    )
+
     limit = API_TOKEN_LIMITS.get(user.role)
     if limit is not None:
         from sqlalchemy import func as _func
         count_result = await db.execute(
-            select(_func.count()).select_from(ApiToken).where(ApiToken.user_id == user.id)
+            select(_func.count())
+            .select_from(ApiToken)
+            .where(ApiToken.user_id == user.id, ApiToken.created_at >= cutoff)
         )
         if count_result.scalar_one() >= limit:
             raise HTTPException(
@@ -75,8 +82,16 @@ async def list_tokens(
     db: AsyncSession = Depends(get_db),
 ):
     """List the current user's API tokens (raw values are never returned)."""
+    cutoff = api_token_cutoff()
+    await db.execute(
+        delete(ApiToken).where(ApiToken.user_id == user.id, ApiToken.created_at < cutoff)
+    )
+    await db.commit()
+
     result = await db.execute(
-        select(ApiToken).where(ApiToken.user_id == user.id).order_by(ApiToken.created_at)
+        select(ApiToken)
+        .where(ApiToken.user_id == user.id, ApiToken.created_at >= cutoff)
+        .order_by(ApiToken.created_at)
     )
     return result.scalars().all()
 

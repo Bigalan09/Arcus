@@ -2,175 +2,224 @@
 {% block title %}Admin – Arcus{% endblock %}
 {% block content %}
 <div class="space-y-8">
-  <h1 class="text-2xl font-semibold">Admin Panel</h1>
-
-  <!-- Users -->
-  <section class="bg-gray-900 rounded-xl p-5 border border-gray-800">
-    <div class="flex items-center justify-between mb-4">
-      <h2 class="font-medium">Users</h2>
-      <button onclick="showUserForm()"
-        class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-3 py-1.5">
-        Create user
-      </button>
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h1 class="text-2xl font-semibold">Admin panel</h1>
+      <p class="app-help mt-1">Manage users, roles, and moderation settings.</p>
     </div>
+    <a href="/dashboard" class="app-btn app-btn-subtle">Back to dashboard</a>
+  </div>
 
-    <!-- Create user form -->
-    <div id="user-form" class="hidden mb-4 space-y-3">
-      <input id="u-email" type="email" placeholder="Email address"
-        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
-      <select id="u-role"
-        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
-        <option value="normal">Normal</option>
-        <option value="pro">Pro</option>
-      </select>
-      <div class="flex gap-2">
-        <button onclick="createUser()"
-          class="bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-4 py-1.5 text-sm">Create</button>
-        <button onclick="document.getElementById('user-form').classList.add('hidden')"
-          class="bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg px-4 py-1.5 text-sm">Cancel</button>
+  <section class="app-card p-5 md:p-6 space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 class="text-lg font-semibold">Users</h2>
+        <p class="app-help mt-1">Select a row to open full user management.</p>
       </div>
-      <p id="user-err" class="text-red-400 text-sm hidden"></p>
+      <button id="show-user-form-btn" type="button" onclick="showUserForm()" class="app-btn app-btn-primary">Create user</button>
     </div>
 
-    <table class="w-full text-sm" id="user-table">
-      <thead>
-        <tr class="text-gray-500 text-xs border-b border-gray-800">
-          <th class="text-left py-2">Email</th>
-          <th class="text-left py-2">Role</th>
-          <th class="text-left py-2">Credits</th>
-          <th class="text-left py-2">Joined</th>
-          <th class="py-2"></th>
-        </tr>
-      </thead>
-      <tbody id="user-list">
-        <tr><td colspan="5" class="py-4 text-gray-500">Loading…</td></tr>
-      </tbody>
-    </table>
+    <div id="user-form" class="hidden app-card-muted p-4 space-y-3">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label class="app-label" for="u-email">Email</label>
+          <input id="u-email" type="email" placeholder="user@example.com" class="app-input">
+        </div>
+        <div>
+          <label class="app-label" for="u-role">Role</label>
+          <select id="u-role" class="app-select">
+            <option value="normal">Normal</option>
+            <option value="pro">Pro</option>
+          </select>
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <button id="create-user-btn" type="button" onclick="createUser()" class="app-btn app-btn-primary">Create user</button>
+        <button type="button" onclick="hideUserForm()" class="app-btn app-btn-secondary">Cancel</button>
+      </div>
+      <p id="user-err" class="hidden app-alert app-alert-error"></p>
+    </div>
+
+    <p id="users-msg" class="hidden app-alert"></p>
+
+    <div class="overflow-x-auto rounded-lg border border-gray-800/80">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-900/70">
+          <tr class="text-gray-400 border-b border-gray-800">
+            <th class="text-left py-3 px-3 font-medium">Email</th>
+            <th class="text-left py-3 px-3 font-medium">Role</th>
+            <th class="text-left py-3 px-3 font-medium">Status</th>
+            <th class="text-left py-3 px-3 font-medium">Joined</th>
+            <th class="text-right py-3 px-3 font-medium">Manage</th>
+          </tr>
+        </thead>
+        <tbody id="user-list">
+          <tr><td colspan="5" class="py-4 px-3 app-empty">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
   </section>
 
-  <!-- Blocklist -->
-  <section class="bg-gray-900 rounded-xl p-5 border border-gray-800">
-    <div class="flex items-center justify-between mb-4">
-      <h2 class="font-medium">Blocklist</h2>
-      <button onclick="showBlocklistForm()"
-        class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-3 py-1.5">
-        Add word
-      </button>
+  <section class="app-card p-5 md:p-6 space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 class="text-lg font-semibold">Blocklist</h2>
+        <p class="app-help mt-1">Blocked words cannot be used in new subdomains.</p>
+      </div>
+      <button id="show-bl-form-btn" type="button" onclick="showBlocklistForm()" class="app-btn app-btn-primary">Add word</button>
     </div>
-    <div id="bl-form" class="hidden mb-4 flex gap-2">
-      <input id="bl-word" type="text" placeholder="Word to block"
-        class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
-      <button onclick="addBlocklistWord()"
-        class="bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-4 py-1.5 text-sm">Add</button>
+
+    <div id="bl-form" class="hidden app-card-muted p-4 space-y-3">
+      <div>
+        <label class="app-label" for="bl-word">Word</label>
+        <input id="bl-word" type="text" placeholder="word to block" class="app-input">
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <button id="add-word-btn" type="button" onclick="addBlocklistWord()" class="app-btn app-btn-primary">Add word</button>
+        <button type="button" onclick="hideBlocklistForm()" class="app-btn app-btn-secondary">Cancel</button>
+      </div>
     </div>
-    <ul id="blocklist" class="space-y-1 text-sm text-gray-300 max-h-64 overflow-y-auto">
-      <li class="text-gray-500">Loading…</li>
+
+    <p id="blocklist-msg" class="hidden app-alert"></p>
+
+    <ul id="blocklist" class="space-y-2 text-sm text-gray-200">
+      <li class="app-empty">Loading...</li>
     </ul>
   </section>
 </div>
 {% endblock %}
 {% block scripts %}
 <script>
+  function setAlert(elementId, text, type = 'info') {
+    const el = document.getElementById(elementId);
+    el.textContent = text;
+    el.classList.remove('hidden', 'app-alert-info', 'app-alert-success', 'app-alert-error', 'app-alert-warning');
+    el.classList.add(`app-alert-${type}`);
+  }
+
+  function hideAlert(elementId) {
+    document.getElementById(elementId).classList.add('hidden');
+  }
+
   async function api(path, opts = {}) {
-    const r = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
-    if (r.status === 401) { window.location.href = '/login'; return null; }
-    if (r.status === 403) { alert('Admin access required'); return null; }
-    return r;
+    const response = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+    if (response.status === 401) {
+      window.location.href = '/login';
+      return null;
+    }
+    if (response.status === 403) {
+      window.location.href = '/dashboard';
+      return null;
+    }
+    return response;
+  }
+
+  function rolePill(role) {
+    if (role === 'admin') {
+      return '<span class="app-pill bg-red-900/50 border-red-800 text-red-200">admin</span>';
+    }
+    if (role === 'pro') {
+      return '<span class="app-pill bg-indigo-900/50 border-indigo-800 text-indigo-200">pro</span>';
+    }
+    return '<span class="app-pill bg-gray-800 border-gray-700 text-gray-300">normal</span>';
+  }
+
+  function statusPill(active) {
+    if (active) {
+      return '<span class="app-pill bg-green-900/45 border-green-800 text-green-200">active</span>';
+    }
+    return '<span class="app-pill bg-gray-800 border-gray-700 text-gray-300">inactive</span>';
   }
 
   async function loadUsers() {
     const r = await api('/admin/users');
     if (!r) return;
+    if (!r.ok) {
+      setAlert('users-msg', await ui.parseApiError(r, 'Failed to load users.'), 'error');
+      return;
+    }
+
     const users = await r.json();
-    // Fetch credits for each user in parallel
-    const creditMap = {};
-    await Promise.all(users.map(async u => {
-      const cr = await api(`/credits?user_id=${u.id}`);
-      if (cr && cr.ok) {
-        const cj = await cr.json();
-        creditMap[u.id] = cj.balance;
-      } else {
-        creditMap[u.id] = '–';
-      }
-    }));
     const tbody = document.getElementById('user-list');
+    if (!users.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="py-4 px-3 app-empty">No users found.</td></tr>';
+      return;
+    }
+
     tbody.innerHTML = users.map(u => `
-      <tr class="border-b border-gray-800/50 hover:bg-gray-800/30" id="user-row-${u.id}">
-        <td class="py-2 pr-4">${u.email}</td>
-        <td class="py-2 pr-4">
-          <span class="text-xs px-2 py-0.5 rounded-full
-            ${u.role === 'admin' ? 'bg-red-900/60 text-red-300' :
-              u.role === 'pro' ? 'bg-indigo-900/60 text-indigo-300' :
-              'bg-gray-700 text-gray-400'}">${u.role}</span>
-        </td>
-        <td class="py-2 pr-4 text-gray-300" id="credits-${u.id}">${creditMap[u.id]}</td>
-        <td class="py-2 pr-4 text-gray-400 text-xs">${new Date(u.created_at).toLocaleDateString()}</td>
-        <td class="py-2 flex gap-3">
-          <button onclick="grantCredits('${u.id}')"
-            class="text-xs text-green-400 hover:text-green-300">Grant credits</button>
-          <button onclick="resetPassword('${u.id}', '${u.email}')"
-            class="text-xs text-yellow-400 hover:text-yellow-300">Reset pwd</button>
+      <tr class="border-b border-gray-800/60 hover:bg-gray-900/55 cursor-pointer" onclick="openUser('${u.id}')">
+        <td class="py-3 px-3 pr-6">${u.email}</td>
+        <td class="py-3 px-3">${rolePill(u.role)}</td>
+        <td class="py-3 px-3">${statusPill(u.active)}</td>
+        <td class="py-3 px-3 text-gray-400">${new Date(u.created_at).toLocaleDateString()}</td>
+        <td class="py-3 px-3 text-right">
+          <button type="button" onclick="event.stopPropagation(); openUser('${u.id}')" class="app-btn-link text-xs">Open</button>
         </td>
       </tr>`).join('');
   }
 
-  async function grantCredits(userId) {
-    const amountStr = prompt('How many credits to grant?');
-    if (amountStr === null) return;
-    const amount = parseInt(amountStr, 10);
-    if (!amount || amount <= 0) { alert('Please enter a positive number.'); return; }
-    const r = await api('/credits/grant', { method: 'POST', body: JSON.stringify({ user_id: userId, amount }) });
-    if (!r) return;
-    if (!r.ok) { const j = await r.json(); alert(j.detail || 'Failed to grant credits.'); return; }
-    const j = await r.json();
-    const el = document.getElementById(`credits-${userId}`);
-    if (el) el.textContent = j.balance;
+  function openUser(userId) {
+    window.location.href = `/admin/users/${userId}/manage`;
   }
 
   function showUserForm() {
+    hideAlert('user-err');
     document.getElementById('user-form').classList.remove('hidden');
     document.getElementById('u-email').focus();
+  }
+
+  function hideUserForm() {
+    document.getElementById('user-form').classList.add('hidden');
+    document.getElementById('u-email').value = '';
+    document.getElementById('u-role').value = 'normal';
+    hideAlert('user-err');
   }
 
   async function createUser() {
     const email = document.getElementById('u-email').value.trim();
     const role = document.getElementById('u-role').value;
-    if (!email) return;
-    const r = await api('/admin/users', { method: 'POST', body: JSON.stringify({ email, role }) });
-    if (!r) return;
-    if (!r.ok) {
-      const j = await r.json();
-      const err = document.getElementById('user-err');
-      err.textContent = j.detail || 'Failed to create user.';
-      err.classList.remove('hidden');
+    const btn = document.getElementById('create-user-btn');
+    if (!email) {
+      setAlert('user-err', 'Enter an email address.', 'error');
       return;
     }
-    document.getElementById('user-form').classList.add('hidden');
-    document.getElementById('u-email').value = '';
-    document.getElementById('user-err').classList.add('hidden');
-    loadUsers();
-  }
 
-  async function resetPassword(id, email) {
-    if (!confirm(`Reset password for ${email}?\nA new temporary password will be emailed to them.`)) return;
-    const r = await api(`/admin/users/${id}/reset-password`, { method: 'POST' });
-    if (r && (r.ok || r.status === 204)) alert('Password reset email sent.');
+    ui.setButtonBusy(btn, true, 'Creating...');
+    try {
+      const r = await api('/admin/users', { method: 'POST', body: JSON.stringify({ email, role }) });
+      if (!r) return;
+      if (!r.ok) {
+        setAlert('user-err', await ui.parseApiError(r, 'Failed to create user.'), 'error');
+        return;
+      }
+      hideUserForm();
+      setAlert('users-msg', 'User created and temporary password sent.', 'success');
+      await loadUsers();
+    } finally {
+      ui.setButtonBusy(btn, false);
+    }
   }
 
   async function loadBlocklist() {
     const r = await api('/admin/blocklist');
     if (!r) return;
+    if (!r.ok) {
+      setAlert('blocklist-msg', await ui.parseApiError(r, 'Failed to load blocklist.'), 'error');
+      return;
+    }
+
     const words = await r.json();
     const list = document.getElementById('blocklist');
     if (!words.length) {
-      list.innerHTML = '<li class="text-gray-500">No blocked words.</li>';
-    } else {
-      list.innerHTML = words.map(w => `
-        <li class="flex items-center justify-between py-1">
-          <span class="font-mono">${w.word}</span>
-          <button onclick="removeWord('${w.word}')" class="text-red-400 hover:text-red-300 text-xs">Remove</button>
-        </li>`).join('');
+      list.innerHTML = '<li class="app-empty">No blocked words.</li>';
+      return;
     }
+
+    list.innerHTML = words.map(w => `
+      <li class="app-card-muted px-3 py-2.5 flex items-center justify-between gap-3">
+        <span class="font-mono text-sm break-all">${w.word}</span>
+        <button type="button" onclick="removeWord('${w.word}')" class="app-btn app-btn-subtle text-xs px-3 py-1.5">Remove</button>
+      </li>`).join('');
   }
 
   function showBlocklistForm() {
@@ -178,18 +227,53 @@
     document.getElementById('bl-word').focus();
   }
 
+  function hideBlocklistForm() {
+    document.getElementById('bl-form').classList.add('hidden');
+    document.getElementById('bl-word').value = '';
+  }
+
   async function addBlocklistWord() {
     const word = document.getElementById('bl-word').value.trim();
-    if (!word) return;
-    await api('/admin/blocklist', { method: 'POST', body: JSON.stringify({ words: [word] }) });
-    document.getElementById('bl-word').value = '';
-    document.getElementById('bl-form').classList.add('hidden');
-    loadBlocklist();
+    const btn = document.getElementById('add-word-btn');
+    if (!word) {
+      setAlert('blocklist-msg', 'Enter a word to block.', 'error');
+      return;
+    }
+
+    ui.setButtonBusy(btn, true, 'Adding...');
+    try {
+      const r = await api('/admin/blocklist', { method: 'POST', body: JSON.stringify({ words: [word] }) });
+      if (!r) return;
+      if (!r.ok) {
+        setAlert('blocklist-msg', await ui.parseApiError(r, 'Failed to add blocked word.'), 'error');
+        return;
+      }
+      hideBlocklistForm();
+      setAlert('blocklist-msg', 'Blocked word added.', 'success');
+      await loadBlocklist();
+    } finally {
+      ui.setButtonBusy(btn, false);
+    }
   }
 
   async function removeWord(word) {
-    await api('/admin/blocklist/' + word, { method: 'DELETE' });
-    loadBlocklist();
+    const confirmed = await ui.confirmAction({
+      title: 'Remove blocked word',
+      message: `Remove '${word}' from the blocklist?`,
+      confirmText: 'Remove',
+      danger: true,
+    });
+    if (!confirmed) return;
+
+    const r = await api('/admin/blocklist/' + encodeURIComponent(word), { method: 'DELETE' });
+    if (!r) return;
+    if (!r.ok && r.status !== 204) {
+      setAlert('blocklist-msg', await ui.parseApiError(r, 'Failed to remove word.'), 'error');
+      return;
+    }
+
+    setAlert('blocklist-msg', 'Blocked word removed.', 'success');
+    await loadBlocklist();
   }
 
   loadUsers();

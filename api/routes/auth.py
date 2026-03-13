@@ -18,7 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.database import get_db
-from api.models import Credit, User
+from api.models import User
 from api.schemas import (
     ChangePasswordRequest,
     LoginRequest,
@@ -81,8 +81,6 @@ async def create_admin_setup(payload: SetupRequest, db: AsyncSession = Depends(g
     )
     db.add(user)
     try:
-        await db.flush()
-        db.add(Credit(user_id=user.id, balance=0))
         await db.commit()
         await db.refresh(user)
     except IntegrityError:
@@ -111,6 +109,11 @@ async def login(payload: LoginRequest, response: Response, db: AsyncSession = De
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password.",
+        )
+    if not user.active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is deactivated.",
         )
 
     token = create_access_token({"sub": str(user.id), "role": user.role})
