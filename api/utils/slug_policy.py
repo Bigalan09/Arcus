@@ -25,6 +25,17 @@ class SlugAssessment:
 
 async def assess_slug(slug: str, domain: str | None, db: AsyncSession) -> SlugAssessment:
     """Assess whether *slug* can be used on *domain*."""
+    return await assess_slug_with_options(slug, domain, db)
+
+
+async def assess_slug_with_options(
+    slug: str,
+    domain: str | None,
+    db: AsyncSession,
+    *,
+    ignore_content_filters: bool = False,
+) -> SlugAssessment:
+    """Assess whether *slug* can be used on *domain* with optional content-filter bypass."""
     actual_domain = domain or settings.primary_domain
     configured = [item.domain for item in settings.configured_domains]
 
@@ -55,24 +66,25 @@ async def assess_slug(slug: str, domain: str | None, db: AsyncSession) -> SlugAs
             detail=f"'{slug}' is a reserved subdomain and cannot be purchased.",
         )
 
-    if contains_builtin_profanity(slug):
-        return SlugAssessment(
-            slug=slug,
-            domain=actual_domain,
-            available=False,
-            reason="profanity",
-            detail=f"The slug '{slug}' contains language that is not permitted (profanity filter).",
-        )
+    if not ignore_content_filters:
+        if contains_builtin_profanity(slug):
+            return SlugAssessment(
+                slug=slug,
+                domain=actual_domain,
+                available=False,
+                reason="profanity",
+                detail=f"The slug '{slug}' contains language that is not permitted (profanity filter).",
+            )
 
-    blocklisted = await get_blocklisted_match(slug, db)
-    if blocklisted:
-        return SlugAssessment(
-            slug=slug,
-            domain=actual_domain,
-            available=False,
-            reason="blocklisted",
-            detail=f"The slug '{slug}' contains a blocked term ('{blocklisted}') and cannot be purchased.",
-        )
+        blocklisted = await get_blocklisted_match(slug, db)
+        if blocklisted:
+            return SlugAssessment(
+                slug=slug,
+                domain=actual_domain,
+                available=False,
+                reason="blocklisted",
+                detail=f"The slug '{slug}' contains a blocked term ('{blocklisted}') and cannot be purchased.",
+            )
 
     result = await db.execute(select(Subdomain.id).where(Subdomain.slug == slug, Subdomain.domain == actual_domain))
     if result.scalar_one_or_none() is not None:

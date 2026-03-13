@@ -71,3 +71,19 @@ async def test_local_dashboard_redirects_to_canonical_ui_host(client):
 
     assert resp.status_code == 307
     assert resp.headers["location"] == "http://api.localhost/dashboard"
+
+
+@pytest.mark.asyncio
+async def test_admin_dashboard_shows_content_filter_bypass_toggle(client, admin_headers):
+    resp = await client.get("/dashboard", headers=admin_headers)
+
+    assert resp.status_code == 200
+    assert "Ignore content filters" in resp.text
+
+
+@pytest.mark.asyncio
+async def test_normal_dashboard_hides_content_filter_bypass_toggle(client, normal_user):
+    resp = await client.get("/dashboard", headers=normal_user["headers"])
+
+    assert resp.status_code == 200
+    assert "Ignore content filters" not in resp.text

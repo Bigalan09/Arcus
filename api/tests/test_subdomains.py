@@ -98,6 +98,23 @@ async def test_purchase_slug_invalid_chars(client, admin_headers):
     assert resp.status_code == 422
 
 
+@pytest.mark.asyncio
+async def test_non_admin_cannot_bypass_content_filters_on_purchase(client, admin_headers, normal_user):
+    """Non-admins must not be able to bypass content filtering when purchasing."""
+    resp = await client.post(
+        "/subdomains/purchase",
+        json={
+            "user_id": normal_user["id"],
+            "slug": "hell",
+            "ignore_content_filters": True,
+        },
+        headers=normal_user["headers"],
+    )
+
+    assert resp.status_code == 403
+    assert "admin" in resp.json()["detail"].lower()
+
+
 # ---------------------------------------------------------------------------
 # POST /subdomains/{slug}/origin
 # ---------------------------------------------------------------------------

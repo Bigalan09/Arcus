@@ -111,6 +111,23 @@
         <span id="slug-availability-text"></span>
       </div>
 
+      {% if user.role == 'admin' %}
+      <div class="app-alert app-alert-warning">
+        <label for="subdomain-ignore-content-filters" class="flex items-start gap-3 cursor-pointer">
+          <input
+            id="subdomain-ignore-content-filters"
+            type="checkbox"
+            class="mt-1 h-4 w-4 rounded border-gray-600 bg-gray-800 text-indigo-600"
+            onchange="onSubdomainContentFilterToggleChange()"
+          >
+          <span>
+            <span class="block font-medium text-sm text-yellow-100">Ignore content filters</span>
+            <span class="block text-sm text-yellow-200/90">Admin only. Skips both the profanity filter and the blocklist for this availability check and creation attempt.</span>
+          </span>
+        </label>
+      </div>
+      {% endif %}
+
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label class="app-label" for="subdomain-origin-host">Origin host (optional)</label>
@@ -397,6 +414,8 @@
     document.getElementById('subdomain-slug').value = '';
     document.getElementById('subdomain-origin-host').value = '';
     document.getElementById('subdomain-origin-port').value = '';
+    const ignoreFilters = document.getElementById('subdomain-ignore-content-filters');
+    if (ignoreFilters) ignoreFilters.checked = false;
     document.getElementById('slug-availability').classList.add('hidden');
     if (slugCheckTimer) clearTimeout(slugCheckTimer);
     lastSlugCheckAt = 0;
@@ -406,6 +425,11 @@
 
   function formatSubdomainName(slug, domain) {
     return domain ? `${slug}.${domain}` : slug;
+  }
+
+  function ignoreSubdomainContentFilters() {
+    if (ROLE !== 'admin') return false;
+    return document.getElementById('subdomain-ignore-content-filters')?.checked === true;
   }
 
   function updateSlugAvailability(state, text) {
@@ -456,6 +480,7 @@
     updateSlugAvailability('loading', `Checking '${formatSubdomainName(slug, selectedDomain)}'...`);
     const params = new URLSearchParams({ slug });
     if (selectedDomain) params.set('domain', selectedDomain);
+    if (ignoreSubdomainContentFilters()) params.set('ignore_content_filters', 'true');
     const r = await fetch(`/subdomains/check?${params}`);
     if (!r.ok) {
       updateSlugAvailability('unavailable', 'Could not verify availability.');
@@ -500,6 +525,21 @@
   function onSubdomainSlugBlur() {
     const slug = document.getElementById('subdomain-slug').value.trim().toLowerCase();
     if (!slug) return;
+    if (slugCheckTimer) clearTimeout(slugCheckTimer);
+    checkSlugAvailability(slug, true);
+  }
+
+  function onSubdomainContentFilterToggleChange() {
+    const slug = document.getElementById('subdomain-slug').value.trim().toLowerCase();
+    lastSlugCheckAt = 0;
+    lastSlugCheckKey = '';
+    lastSlugCheckResult = null;
+
+    if (!slug) {
+      updateSlugAvailability('neutral', 'Type a slug to check availability.');
+      return;
+    }
+
     if (slugCheckTimer) clearTimeout(slugCheckTimer);
     checkSlugAvailability(slug, true);
   }
@@ -556,6 +596,7 @@
 
       const purchaseBody = { user_id: USER_ID, slug };
       if (selectedDomain) purchaseBody.domain = selectedDomain;
+      if (ignoreSubdomainContentFilters()) purchaseBody.ignore_content_filters = true;
 
       const r = await api('/subdomains/purchase', {
         method: 'POST',

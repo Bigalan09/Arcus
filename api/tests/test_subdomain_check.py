@@ -70,3 +70,15 @@ async def test_check_slug_invalid_domain_reports_unavailable(client):
     data = resp.json()
     assert data["available"] is False
     assert data["reason"] == "invalid_domain"
+
+
+@pytest.mark.asyncio
+async def test_non_admin_cannot_bypass_content_filters_on_check(client, normal_user):
+    """Non-admins must not be able to bypass content filtering on the availability endpoint."""
+    resp = await client.get(
+        "/subdomains/check?slug=hell&ignore_content_filters=true",
+        headers=normal_user["headers"],
+    )
+
+    assert resp.status_code == 403
+    assert "admin" in resp.json()["detail"].lower()
