@@ -29,9 +29,15 @@ API_TOKEN_LIMITS: dict[str, int | None] = {
 API_TOKEN_MAX_AGE = timedelta(days=90)
 
 
+def _naive_utc_now() -> datetime:
+    """Return the current UTC timestamp as a naive datetime."""
+    return datetime.now(UTC).replace(tzinfo=None)
+
+
 def api_token_cutoff() -> datetime:
     """Return the oldest allowed creation time for API tokens."""
-    return datetime.now(UTC) - API_TOKEN_MAX_AGE
+    # Use naive UTC to match SQLAlchemy DateTime columns mapped without timezone.
+    return _naive_utc_now() - API_TOKEN_MAX_AGE
 
 
 # ---------------------------------------------------------------------------
@@ -63,14 +69,14 @@ async def _user_from_api_token(raw_token: str, db: AsyncSession) -> User | None:
         return None
 
     created_at = api_token.created_at
-    if created_at.tzinfo is None:
-        created_at = created_at.replace(tzinfo=UTC)
+    if created_at.tzinfo is not None:
+        created_at = created_at.astimezone(UTC).replace(tzinfo=None)
     if created_at < api_token_cutoff():
         await db.delete(api_token)
         return None
 
     # Update last_used_at best-effort (no await to avoid blocking the request)
-    api_token.last_used_at = datetime.now(UTC)
+    api_token.last_used_at = _naive_utc_now()
     db.add(api_token)
     # Commit is deferred; the session will be flushed at end of request
     return await db.get(User, api_token.user_id)

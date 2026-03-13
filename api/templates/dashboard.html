@@ -224,13 +224,13 @@
               <span class="font-mono">${s.slug}</span>
               <p id="origin-text-${s.slug}" class="text-gray-400 text-xs mt-1">${s.origin_host ? s.origin_host + ':' + s.origin_port : 'No origin configured'}</p>
             </div>
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-4">
               <button onclick="toggleOriginForm('${s.slug}')"
-                class="text-xs text-indigo-400 hover:text-indigo-300 whitespace-nowrap">
+                class="text-xs text-indigo-300 hover:text-indigo-200 whitespace-nowrap border border-indigo-900/60 rounded px-2 py-1">
                 ${s.origin_host ? 'Edit origin' : 'Set origin'}
               </button>
               <button onclick="deleteSubdomain('${s.slug}')"
-                class="text-xs text-red-400 hover:text-red-300 whitespace-nowrap">
+                class="text-xs text-red-300 hover:text-red-200 whitespace-nowrap border border-red-900/60 rounded px-2 py-1">
                 Delete
               </button>
             </div>
