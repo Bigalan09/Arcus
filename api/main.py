@@ -4,6 +4,7 @@ import logging
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from api.routes import admin, auth, credits, frontend, subdomains, tokens, users, webhooks
 
@@ -17,6 +18,11 @@ app = FastAPI(
     description="Subdomain-as-a-Service platform",
     version="2.0.0",
 )
+
+# ---------------------------------------------------------------------------
+# Static files
+# ---------------------------------------------------------------------------
+app.mount("/static", StaticFiles(directory="api/static"), name="static")
 
 # ---------------------------------------------------------------------------
 # Routers

@@ -1,0 +1,11 @@
+{
+  "name": "arcus-frontend",
+  "private": true,
+  "scripts": {
+    "css:build": "tailwindcss -c tailwind.config.js -i api/static/tailwind.src.css -o api/static/tailwind.css --minify",
+    "css:watch": "tailwindcss -c tailwind.config.js -i api/static/tailwind.src.css -o api/static/tailwind.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.19"
+  }
+}
