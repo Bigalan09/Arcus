@@ -81,21 +81,21 @@ class SubdomainResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Blacklist
+# Blocklist
 # ---------------------------------------------------------------------------
 
-class BlacklistAddRequest(BaseModel):
+class BlocklistAddRequest(BaseModel):
     words: list[str] = Field(min_length=1, description="One or more words to block")
 
 
-class BlacklistEntry(BaseModel):
+class BlocklistEntry(BaseModel):
     word: str
     created_at: datetime
 
     model_config = {"from_attributes": True}
 
 
-class BlacklistImportResult(BaseModel):
+class BlocklistImportResult(BaseModel):
     imported: int
     mode: str
 

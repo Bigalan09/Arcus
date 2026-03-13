@@ -1,14 +1,14 @@
-"""Admin blacklist management routes.
+"""Admin blocklist management routes.
 
 All endpoints require an ``X-Api-Key`` header matching ``API_SECRET_KEY``.
 
 Endpoints
 ---------
-GET    /admin/blacklist           – list all blocked words
-POST   /admin/blacklist           – add one or more words (JSON body)
-DELETE /admin/blacklist/{word}    – remove a single word
-GET    /admin/blacklist/export    – download the list as a CSV file
-POST   /admin/blacklist/import    – upload a CSV file (?mode=append|replace)
+GET    /admin/blocklist           – list all blocked words
+POST   /admin/blocklist           – add one or more words (JSON body)
+DELETE /admin/blocklist/{word}    – remove a single word
+GET    /admin/blocklist/export    – download the list as a CSV file
+POST   /admin/blocklist/import    – upload a CSV file (?mode=append|replace)
 """
 
 import csv
@@ -25,8 +25,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
 from api.database import get_db
-from api.models import Blacklist
-from api.schemas import BlacklistAddRequest, BlacklistEntry, BlacklistImportResult
+from api.models import Blocklist
+from api.schemas import BlocklistAddRequest, BlocklistEntry, BlocklistImportResult
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -50,13 +50,13 @@ async def require_api_key(api_key: str | None = Security(_api_key_header)) -> st
 # List
 # ---------------------------------------------------------------------------
 
-@router.get("/blacklist", response_model=list[BlacklistEntry])
-async def list_blacklist(
+@router.get("/blocklist", response_model=list[BlocklistEntry])
+async def list_blocklist(
     db: AsyncSession = Depends(get_db),
     _: str = Depends(require_api_key),
 ):
-    """Return all words currently on the blacklist."""
-    result = await db.execute(select(Blacklist).order_by(Blacklist.word))
+    """Return all words currently on the blocklist."""
+    result = await db.execute(select(Blocklist).order_by(Blocklist.word))
     return result.scalars().all()
 
 
@@ -64,24 +64,21 @@ async def list_blacklist(
 # Add (single or batch)
 # ---------------------------------------------------------------------------
 
-@router.post("/blacklist", response_model=list[BlacklistEntry], status_code=status.HTTP_201_CREATED)
-async def add_to_blacklist(
-    payload: BlacklistAddRequest,
+@router.post("/blocklist", response_model=list[BlocklistEntry], status_code=status.HTTP_201_CREATED)
+async def add_to_blocklist(
+    payload: BlocklistAddRequest,
     db: AsyncSession = Depends(get_db),
     _: str = Depends(require_api_key),
 ):
-    """Add one or more words to the blacklist. Duplicates are silently ignored."""
-    added: list[Blacklist] = []
+    """Add one or more words to the blocklist. Duplicates are silently ignored."""
     for raw_word in payload.words:
         word = raw_word.strip().lower()
         if not word:
             continue
-        existing = await db.execute(select(Blacklist).where(Blacklist.word == word))
+        existing = await db.execute(select(Blocklist).where(Blocklist.word == word))
         if existing.scalar_one_or_none() is not None:
             continue
-        entry = Blacklist(word=word)
-        db.add(entry)
-        added.append(entry)
+        db.add(Blocklist(word=word))
 
     try:
         await db.commit()
@@ -90,7 +87,7 @@ async def add_to_blacklist(
 
     # Re-fetch so created_at is populated.
     result = await db.execute(
-        select(Blacklist).where(Blacklist.word.in_([w.strip().lower() for w in payload.words]))
+        select(Blocklist).where(Blocklist.word.in_([w.strip().lower() for w in payload.words]))
     )
     return result.scalars().all()
 
@@ -99,17 +96,20 @@ async def add_to_blacklist(
 # Delete
 # ---------------------------------------------------------------------------
 
-@router.delete("/blacklist/{word}", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_from_blacklist(
+@router.delete("/blocklist/{word}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_from_blocklist(
     word: str,
     db: AsyncSession = Depends(get_db),
     _: str = Depends(require_api_key),
 ):
-    """Remove a single word from the blacklist."""
-    result = await db.execute(select(Blacklist).where(Blacklist.word == word.lower()))
+    """Remove a single word from the blocklist."""
+    result = await db.execute(select(Blocklist).where(Blocklist.word == word.lower()))
     entry = result.scalar_one_or_none()
     if entry is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"'{word}' is not on the blacklist.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"'{word}' is not on the blocklist.",
+        )
     await db.delete(entry)
     await db.commit()
 
@@ -118,13 +118,13 @@ async def remove_from_blacklist(
 # CSV export
 # ---------------------------------------------------------------------------
 
-@router.get("/blacklist/export")
-async def export_blacklist_csv(
+@router.get("/blocklist/export")
+async def export_blocklist_csv(
     db: AsyncSession = Depends(get_db),
     _: str = Depends(require_api_key),
 ):
-    """Download the entire blacklist as a CSV file."""
-    result = await db.execute(select(Blacklist.word).order_by(Blacklist.word))
+    """Download the entire blocklist as a CSV file."""
+    result = await db.execute(select(Blocklist.word).order_by(Blocklist.word))
     words = result.scalars().all()
 
     buf = io.StringIO()
@@ -137,7 +137,7 @@ async def export_blacklist_csv(
     return StreamingResponse(
         iter([buf.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=blacklist.csv"},
+        headers={"Content-Disposition": "attachment; filename=blocklist.csv"},
     )
 
 
@@ -145,8 +145,8 @@ async def export_blacklist_csv(
 # CSV import
 # ---------------------------------------------------------------------------
 
-@router.post("/blacklist/import", response_model=BlacklistImportResult)
-async def import_blacklist_csv(
+@router.post("/blocklist/import", response_model=BlocklistImportResult)
+async def import_blocklist_csv(
     request: Request,
     mode: Literal["append", "replace"] = Query(
         default="append",
@@ -176,16 +176,16 @@ async def import_blacklist_csv(
         words.append(cell.lower())
 
     if mode == "replace":
-        await db.execute(delete(Blacklist))
+        await db.execute(delete(Blocklist))
 
     imported = 0
     for word in words:
-        existing = await db.execute(select(Blacklist).where(Blacklist.word == word))
+        existing = await db.execute(select(Blocklist).where(Blocklist.word == word))
         if existing.scalar_one_or_none() is not None:
             continue
-        db.add(Blacklist(word=word))
+        db.add(Blocklist(word=word))
         imported += 1
 
     await db.commit()
-    logger.info("Blacklist CSV import (%s): %d word(s) imported", mode, imported)
-    return BlacklistImportResult(imported=imported, mode=mode)
+    logger.info("Blocklist CSV import (%s): %d word(s) imported", mode, imported)
+    return BlocklistImportResult(imported=imported, mode=mode)

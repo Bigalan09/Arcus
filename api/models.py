@@ -55,8 +55,8 @@ class Subdomain(Base):
     user: Mapped["User"] = relationship("User", back_populates="subdomains")
 
 
-class Blacklist(Base):
-    __tablename__ = "blacklist"
+class Blocklist(Base):
+    __tablename__ = "blocklist"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     word: Mapped[str] = mapped_column(Text, nullable=False, unique=True)

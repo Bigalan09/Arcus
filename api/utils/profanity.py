@@ -1,42 +1,44 @@
-"""Profanity and blacklist checking for subdomain slugs.
+"""Profanity and blocklist checking for subdomain slugs.
 
 Two layers of filtering:
-1. Built-in word list – a curated set of commonly blocked terms.
-2. Admin-managed blacklist stored in the database.
+1. ``better-profanity`` library word list (916 terms) – broad, maintained
+   coverage with Unicode confusable variants.
+2. Admin-managed blocklist stored in the database – custom terms added by the
+   platform operator via the ``/admin/blocklist`` endpoints.
 
-Both checks use substring matching so that, for example, a slug of
-``shitapp`` is caught by the word ``shit``.
+Both layers use substring matching so that a slug such as ``shitapp`` is
+caught by the term ``shit``, regardless of word boundaries.
 """
 
+from better_profanity import profanity as _profanity
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.models import Blacklist
+from api.models import Blocklist
 
-# ---------------------------------------------------------------------------
-# Built-in profanity word list
-# ---------------------------------------------------------------------------
-# Kept deliberately minimal. Extend as needed.
-_BUILTIN: frozenset[str] = frozenset({
-    "shit", "fuck", "cunt", "bitch", "cock", "dick",
-    "pussy", "asshole", "bastard", "whore", "slut",
-    "nigger", "nigga", "faggot", "retard", "twat",
-})
+# Initialise the library's default word list once at import time, then extract
+# the plain strings for fast substring scanning. better_profanity stores words
+# as VaryingString objects; the ._original attribute holds the base form.
+_profanity.load_censor_words()
+_BUILTIN_WORDS: frozenset[str] = frozenset(
+    vs._original for vs in _profanity.CENSOR_WORDSET
+)
 
 
 def contains_builtin_profanity(slug: str) -> str | None:
-    """Return the matched word if *slug* contains a built-in profanity term, else None."""
+    """Return the matched word if *slug* contains any term from the built-in
+    profanity list as a substring, otherwise return None."""
     slug_lower = slug.lower()
-    for word in _BUILTIN:
+    for word in _BUILTIN_WORDS:
         if word in slug_lower:
             return word
     return None
 
 
-async def get_blacklisted_match(slug: str, db: AsyncSession) -> str | None:
-    """Return the matched blacklist word if *slug* contains any admin-defined blocked
-    word as a substring, otherwise return None."""
-    result = await db.execute(select(Blacklist.word))
+async def get_blocklisted_match(slug: str, db: AsyncSession) -> str | None:
+    """Return the matched blocklist word if *slug* contains any admin-defined
+    blocked word as a substring, otherwise return None."""
+    result = await db.execute(select(Blocklist.word))
     words = result.scalars().all()
     slug_lower = slug.lower()
     for word in words:
@@ -46,7 +48,7 @@ async def get_blacklisted_match(slug: str, db: AsyncSession) -> str | None:
 
 
 async def check_slug(slug: str, db: AsyncSession) -> None:
-    """Raise ``ValueError`` if *slug* matches any profanity or blacklist entry.
+    """Raise ``ValueError`` if *slug* matches any profanity or blocklist entry.
 
     The message identifies which layer triggered the block.
     """
@@ -56,7 +58,7 @@ async def check_slug(slug: str, db: AsyncSession) -> None:
             f"The slug '{slug}' contains language that is not permitted (profanity filter)."
         )
 
-    match = await get_blacklisted_match(slug, db)
+    match = await get_blocklisted_match(slug, db)
     if match:
         raise ValueError(
             f"The slug '{slug}' contains a blocked term ('{match}') and cannot be purchased."

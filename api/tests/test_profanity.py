@@ -36,20 +36,20 @@ async def test_builtin_profanity_substring_rejected(client):
 
 
 @pytest.mark.asyncio
-async def test_blacklisted_word_blocks_purchase(client):
-    """After an admin adds a word to the blacklist, slugs containing it are rejected."""
+async def test_blocklisted_word_blocks_purchase(client):
+    """After an admin adds a word to the blocklist, slugs containing it are rejected."""
     import os
     api_key = os.environ.get("API_SECRET_KEY", "changeme")
 
     uid = await _user_with_credits(client, "pf4@example.com")
 
-    # Slug is clean before blacklisting.
+    # Slug is clean before blocklisting.
     resp = await client.post("/subdomains/purchase", json={"user_id": uid, "slug": "arcustest"})
     assert resp.status_code == 201
 
-    # Admin adds "arcustest" to the blacklist.
+    # Admin adds "arcustest" to the blocklist.
     await client.post(
-        "/admin/blacklist",
+        "/admin/blocklist",
         json={"words": ["arcus"]},
         headers={"X-Api-Key": api_key},
     )

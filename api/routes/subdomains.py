@@ -38,7 +38,7 @@ async def purchase_subdomain(payload: SubdomainPurchase, db: AsyncSession = Depe
 
     credit.balance -= 1
 
-    # Profanity / blacklist check before committing.
+    # Profanity / blocklist check before committing.
     try:
         await check_slug(payload.slug, db)
     except ValueError as exc:
