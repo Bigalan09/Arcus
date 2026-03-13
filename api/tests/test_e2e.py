@@ -947,6 +947,42 @@ async def test_cookie_auth_logout_clears_cookie(client):
     assert "arcus_session" not in r.cookies or r.cookies.get("arcus_session") == ""
 
 
+@pytest.mark.asyncio
+async def test_cookie_auth_relogin_after_logout(client):
+    """A browser-style client can log out and then establish a fresh session."""
+    await client.post(
+        "/auth/setup",
+        json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+    )
+
+    login_1 = await client.post(
+        "/auth/login",
+        json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+    )
+    assert login_1.status_code == 200
+    assert client.cookies.get("arcus_session")
+
+    me_1 = await client.get("/auth/me")
+    assert me_1.status_code == 200
+
+    logout = await client.post("/auth/logout")
+    assert logout.status_code == 204
+    assert client.cookies.get("arcus_session") is None
+
+    me_2 = await client.get("/auth/me")
+    assert me_2.status_code == 401
+
+    login_2 = await client.post(
+        "/auth/login",
+        json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+    )
+    assert login_2.status_code == 200
+    assert client.cookies.get("arcus_session")
+
+    me_3 = await client.get("/auth/me")
+    assert me_3.status_code == 200
+
+
 # ===========================================================================
 # 8. Admin user management details
 # ===========================================================================

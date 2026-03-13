@@ -97,6 +97,33 @@ async def test_docker_me(http, admin_headers):
     assert r.json()["role"] == "admin"
 
 
+@pytest.mark.asyncio
+async def test_docker_cookie_reauth_after_logout(http):
+    """The live server allows login, logout, and login again with the same client cookie jar."""
+    await http.post("/auth/setup", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
+
+    login_1 = await http.post("/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
+    assert login_1.status_code == 200
+    assert http.cookies.get("arcus_session")
+
+    me_1 = await http.get("/auth/me")
+    assert me_1.status_code == 200
+
+    logout = await http.post("/auth/logout")
+    assert logout.status_code == 204
+    assert http.cookies.get("arcus_session") is None
+
+    me_2 = await http.get("/auth/me")
+    assert me_2.status_code == 401
+
+    login_2 = await http.post("/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
+    assert login_2.status_code == 200
+    assert http.cookies.get("arcus_session")
+
+    me_3 = await http.get("/auth/me")
+    assert me_3.status_code == 200
+
+
 # ---------------------------------------------------------------------------
 # User management
 # ---------------------------------------------------------------------------
