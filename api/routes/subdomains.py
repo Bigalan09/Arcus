@@ -12,6 +12,7 @@ from api.database import get_db
 from api.models import Credit, Subdomain, User
 from api.schemas import OriginSet, SubdomainPurchase, SubdomainResponse
 from api.utils.cloudflare import create_dns_record
+from api.utils.profanity import check_slug
 from api.utils.validation import validate_origin_host
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,13 @@ async def purchase_subdomain(payload: SubdomainPurchase, db: AsyncSession = Depe
         )
 
     credit.balance -= 1
+
+    # Profanity / blacklist check before committing.
+    try:
+        await check_slug(payload.slug, db)
+    except ValueError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
 
     subdomain = Subdomain(user_id=payload.user_id, slug=payload.slug)
     db.add(subdomain)

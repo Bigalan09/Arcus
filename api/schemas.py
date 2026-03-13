@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
@@ -8,13 +9,18 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 # Users
 # ---------------------------------------------------------------------------
 
+UserRole = Literal["normal", "pro", "admin"]
+
+
 class UserCreate(BaseModel):
     email: EmailStr
+    role: UserRole = "normal"
 
 
 class UserResponse(BaseModel):
     id: uuid.UUID
     email: str
+    role: str
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -72,3 +78,24 @@ class SubdomainResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Blacklist
+# ---------------------------------------------------------------------------
+
+class BlacklistAddRequest(BaseModel):
+    words: list[str] = Field(min_length=1, description="One or more words to block")
+
+
+class BlacklistEntry(BaseModel):
+    word: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class BlacklistImportResult(BaseModel):
+    imported: int
+    mode: str
+

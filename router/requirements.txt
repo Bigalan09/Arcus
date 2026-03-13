@@ -4,3 +4,4 @@ httpx==0.27.0
 sqlalchemy==2.0.31
 asyncpg==0.29.0
 pydantic-settings==2.3.4
+aiosqlite==0.20.0

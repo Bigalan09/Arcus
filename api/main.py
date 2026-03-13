@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 
-from api.routes import credits, subdomains, users
+from api.routes import admin, credits, subdomains, users
 
 logging.basicConfig(
     level=logging.INFO,
@@ -25,6 +25,7 @@ app = FastAPI(
 app.include_router(users.router)
 app.include_router(credits.router)
 app.include_router(subdomains.router)
+app.include_router(admin.router)
 
 
 # ---------------------------------------------------------------------------

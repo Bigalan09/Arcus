@@ -14,6 +14,12 @@ class User(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    role: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="normal",
+        server_default="normal",
+    )
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
 
     credits: Mapped["Credit"] = relationship("Credit", back_populates="user", uselist=False, cascade="all, delete-orphan")
@@ -47,3 +53,12 @@ class Subdomain(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
 
     user: Mapped["User"] = relationship("User", back_populates="subdomains")
+
+
+class Blacklist(Base):
+    __tablename__ = "blacklist"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    word: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
+
