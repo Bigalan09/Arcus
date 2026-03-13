@@ -115,6 +115,33 @@ docker compose -f docker-compose.e2e.yml down -v
 - DNS resolution checks prevent private-network origin bypass
 - Edge rate limiting is enforced by Traefik
 
+## Arcus vs Coolify
+
+[Coolify](https://coolify.io) is a self-hosted Platform-as-a-Service (PaaS) that lets you deploy full
+applications (Node, PHP, Python, Docker images, databases, etc.) to your own servers — the open-source
+alternative to Heroku/Netlify/Vercel.
+
+Arcus solves a different, complementary problem: **subdomain-as-a-service**.
+
+| | Arcus | Coolify |
+|---|---|---|
+| **Primary purpose** | Sell & route customer subdomains on your own base domain | Deploy & manage full applications on your own servers |
+| **What it manages** | DNS records, TLS edge, per-subdomain origin routing | Servers, Docker containers, databases, networking |
+| **Target user** | SaaS builders who want to offer `<customer>.yourdomain.com` | Developers who want to self-host their apps |
+| **DNS provider** | Cloudflare (built-in API integration) | Delegated to the user / cloud provider |
+| **Billing model** | Credit-based subdomain purchases (built in) | Not applicable |
+| **Reverse proxy** | Traefik (wildcard TLS, per-subdomain routing) | Traefik or Caddy (per-app routing) |
+| **Auth surface** | JWT + API tokens for your control plane | Web UI sessions for the operator |
+| **Webhooks** | Yes — lifecycle events for subdomain changes | Yes — deploy hooks |
+| **Language/stack** | Python / FastAPI | PHP / Laravel |
+
+**In short:** Use Coolify when you want to host your own apps. Use Arcus when you want to
+*sell or assign subdomains* to your own customers and proxy their traffic — a use-case Coolify
+does not address.
+
+The two tools can work side-by-side: Coolify can host the applications that Arcus routes traffic
+to via customer subdomains.
+
 ## Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md).
