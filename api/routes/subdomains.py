@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.database import get_db
 from api.models import Credit, Subdomain, User
-from api.schemas import OriginSet, SubdomainPurchase, SubdomainResponse
+from api.schemas import OriginSet, SubdomainCheckResponse, SubdomainPurchase, SubdomainResponse
 from api.utils.cloudflare import create_dns_record
 from api.utils.profanity import check_slug
 from api.utils.validation import validate_origin_host
@@ -87,6 +87,17 @@ async def set_origin(slug: str, payload: OriginSet, db: AsyncSession = Depends(g
     await db.refresh(subdomain)
     logger.info("Origin set for '%s': %s:%d", slug, validated_host, payload.origin_port)
     return subdomain
+
+
+@router.get("/check", response_model=SubdomainCheckResponse)
+async def check_subdomain(
+    slug: str = Query(..., description="Slug to check for availability"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Check whether a subdomain slug is available to purchase."""
+    result = await db.execute(select(Subdomain).where(Subdomain.slug == slug))
+    taken = result.scalar_one_or_none() is not None
+    return SubdomainCheckResponse(slug=slug, available=not taken)
 
 
 @router.get("", response_model=list[SubdomainResponse])

@@ -5,7 +5,7 @@ import pytest
 from router.main import _extract_slug
 from router.tests.conftest import insert_subdomain
 
-BASE = "thesoftware.dev"
+BASE = "bigalan.dev"
 
 
 # ---------------------------------------------------------------------------
@@ -25,7 +25,7 @@ def test_extract_slug_not_subdomain():
 
 
 def test_extract_slug_deep_subdomain():
-    """Two-level subdomains (a.b.thesoftware.dev) are not routed."""
+    """Two-level subdomains (a.b.bigalan.dev) are not routed."""
     assert _extract_slug(f"a.b.{BASE}") is None
 
 
@@ -53,7 +53,7 @@ async def test_normal_user_gets_interstitial(client):
     body = resp.text
     assert "Arcus" in body
     assert "normalsite" in body
-    assert "thesoftware.dev" in body
+    assert "bigalan.dev" in body
 
 
 @pytest.mark.asyncio

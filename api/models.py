@@ -62,3 +62,14 @@ class Blocklist(Base):
     word: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
 
+
+class Webhook(Base):
+    __tablename__ = "webhooks"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    secret: Mapped[str | None] = mapped_column(Text, nullable=True)
+    events: Mapped[str] = mapped_column(Text, nullable=False, default="credit.request", server_default="credit.request")
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
+
