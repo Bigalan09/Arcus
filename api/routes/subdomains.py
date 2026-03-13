@@ -13,8 +13,8 @@ from api.database import get_db
 from api.models import Credit, Subdomain, User, Webhook
 from api.schemas import OriginSet, SubdomainCheckResponse, SubdomainPurchase, SubdomainResponse
 from api.utils.cloudflare import create_dns_record
-from api.utils.deps import get_current_user
-from api.utils.slug_policy import assess_slug
+from api.utils.deps import get_current_user, get_current_user_optional
+from api.utils.slug_policy import assess_slug_with_options
 from api.utils.validation import validate_origin_host
 from api.utils.webhooks import fire_webhooks
 
@@ -38,13 +38,24 @@ async def purchase_subdomain(
             detail="You can only purchase subdomains for your own account.",
         )
 
+    if payload.ignore_content_filters and user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required to ignore content filters.",
+        )
+
     domain = payload.domain or settings.primary_domain
 
     target_user = await db.get(User, payload.user_id)
     if target_user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
 
-    assessment = await assess_slug(payload.slug, domain, db)
+    assessment = await assess_slug_with_options(
+        payload.slug,
+        domain,
+        db,
+        ignore_content_filters=payload.ignore_content_filters,
+    )
     if not assessment.available:
         status_code = (
             status.HTTP_409_CONFLICT
@@ -145,10 +156,26 @@ async def set_origin(
 async def check_subdomain(
     slug: str = Query(..., description="Slug to check for availability"),
     domain: str | None = Query(None, description="Domain to check against (defaults to primary)"),
+    ignore_content_filters: bool = Query(
+        False,
+        description="Admin only: bypass profanity and blocklist checks for this availability check",
+    ),
+    user: User | None = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
 ):
     """Check whether a subdomain slug is available for a given domain (public endpoint)."""
-    assessment = await assess_slug(slug, domain, db)
+    if ignore_content_filters and (user is None or user.role != "admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required to ignore content filters.",
+        )
+
+    assessment = await assess_slug_with_options(
+        slug,
+        domain,
+        db,
+        ignore_content_filters=ignore_content_filters,
+    )
     return SubdomainCheckResponse(
         slug=assessment.slug,
         domain=assessment.domain,

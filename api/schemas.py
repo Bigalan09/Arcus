@@ -134,6 +134,10 @@ class SubdomainPurchase(BaseModel):
     user_id: uuid.UUID
     slug: str = Field(min_length=1, max_length=64)
     domain: str | None = Field(default=None, description="Target domain (defaults to the primary configured domain)")
+    ignore_content_filters: bool = Field(
+        default=False,
+        description="Admin only: bypass profanity and blocklist checks for this purchase",
+    )
 
 
 class OriginSet(BaseModel):

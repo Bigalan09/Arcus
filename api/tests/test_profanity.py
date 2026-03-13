@@ -110,3 +110,77 @@ async def test_check_endpoint_marks_hello_available(client):
     data = resp.json()
     assert data["available"] is True
     assert data["reason"] is None
+
+
+@pytest.mark.asyncio
+async def test_admin_can_bypass_builtin_profanity_for_check(client, admin_headers):
+    """Admins can explicitly bypass the built-in profanity filter when checking availability."""
+    resp = await client.get(
+        "/subdomains/check?slug=hell&ignore_content_filters=true",
+        headers=admin_headers,
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["available"] is True
+    assert data["reason"] is None
+
+
+@pytest.mark.asyncio
+async def test_admin_can_bypass_blocklist_for_check(client, admin_headers):
+    """Admins can explicitly bypass the blocklist when checking availability."""
+    await client.post(
+        "/admin/blocklist",
+        json={"words": ["arcus"]},
+        headers=admin_headers,
+    )
+
+    resp = await client.get(
+        "/subdomains/check?slug=arcuslan&ignore_content_filters=true",
+        headers=admin_headers,
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["available"] is True
+    assert data["reason"] is None
+
+
+@pytest.mark.asyncio
+async def test_admin_can_bypass_builtin_profanity_for_purchase(client, admin_headers):
+    """Admins can explicitly bypass the built-in profanity filter when purchasing."""
+    me = await client.get("/auth/me", headers=admin_headers)
+    assert me.status_code == 200
+    admin_id = me.json()["id"]
+
+    resp = await client.post(
+        "/subdomains/purchase",
+        json={"user_id": admin_id, "slug": "hell", "ignore_content_filters": True},
+        headers=admin_headers,
+    )
+
+    assert resp.status_code == 201
+    assert resp.json()["slug"] == "hell"
+
+
+@pytest.mark.asyncio
+async def test_admin_can_bypass_blocklist_for_purchase(client, admin_headers):
+    """Admins can explicitly bypass the blocklist when purchasing."""
+    await client.post(
+        "/admin/blocklist",
+        json={"words": ["arcus"]},
+        headers=admin_headers,
+    )
+
+    me = await client.get("/auth/me", headers=admin_headers)
+    assert me.status_code == 200
+    admin_id = me.json()["id"]
+
+    resp = await client.post(
+        "/subdomains/purchase",
+        json={"user_id": admin_id, "slug": "arcuslan", "ignore_content_filters": True},
+        headers=admin_headers,
+    )
+
+    assert resp.status_code == 201
+    assert resp.json()["slug"] == "arcuslan"
