@@ -1,7 +1,7 @@
 # Arcus
 
 Arcus is a minimal, production-sensible subdomain-as-a-service platform.  
-Users purchase subdomains under **thesoftware.dev** using credits, point them at their own origin server, and all traffic is transparently reverse-proxied through the platform.
+Users purchase subdomains under **bigalan.dev** using credits, point them at their own origin server, and all traffic is transparently reverse-proxied through the platform.
 
 ---
 
@@ -27,7 +27,7 @@ Users purchase subdomains under **thesoftware.dev** using credits, point them at
 |------------|--------------------------------------------------|
 | `postgres` | Stores users, credits, and subdomain records     |
 | `api`      | REST API – user/credit/subdomain management      |
-| `router`   | Reverse proxy – routes `*.thesoftware.dev` traffic |
+| `router`   | Reverse proxy – routes `*.bigalan.dev` traffic |
 | `traefik`  | Edge load balancer with automatic TLS            |
 
 ---
@@ -35,7 +35,7 @@ Users purchase subdomains under **thesoftware.dev** using credits, point them at
 ## Prerequisites
 
 - Docker ≥ 24 and Docker Compose V2
-- A Cloudflare account with `thesoftware.dev` configured
+- A Cloudflare account with `bigalan.dev` configured
 - A Cloudflare API token with **Zone:DNS:Edit** permission
 
 ---
@@ -45,8 +45,8 @@ Users purchase subdomains under **thesoftware.dev** using credits, point them at
 | Variable               | Required | Default            | Description                          |
 |------------------------|----------|--------------------|--------------------------------------|
 | `CLOUDFLARE_API_TOKEN` | ✅        | –                  | Cloudflare API token (DNS edit)      |
-| `CLOUDFLARE_ZONE_ID`   | ✅        | –                  | Zone ID for `thesoftware.dev`        |
-| `BASE_DOMAIN`          | ❌        | `thesoftware.dev`  | Root domain                          |
+| `CLOUDFLARE_ZONE_ID`   | ✅        | –                  | Zone ID for `bigalan.dev`        |
+| `BASE_DOMAIN`          | ❌        | `bigalan.dev`  | Root domain                          |
 | `API_SECRET_KEY`       | ❌        | `changeme`         | Signing key (extend for auth)        |
 | `POSTGRES_PASSWORD`    | ❌        | `arcus`            | PostgreSQL password                  |
 
@@ -55,12 +55,12 @@ Users purchase subdomains under **thesoftware.dev** using credits, point them at
 ## Cloudflare DNS setup
 
 1. Log into the [Cloudflare dashboard](https://dash.cloudflare.com).
-2. Select your `thesoftware.dev` zone.
+2. Select your `bigalan.dev` zone.
 3. Add a **wildcard A record** pointing to your server's public IP:
 
    | Type | Name               | Content        | Proxy status |
    |------|--------------------|----------------|--------------|
-   | A    | `*.thesoftware.dev`| `<your IP>`    | Proxied ✅   |
+   | A    | `*.bigalan.dev`| `<your IP>`    | Proxied ✅   |
 
 4. Obtain your **Zone ID** from the zone overview page (right-hand sidebar).
 5. Create an API token with *Zone › DNS › Edit* permission.
@@ -87,8 +87,8 @@ docker compose up -d
 docker compose ps
 ```
 
-The API is reachable at `https://api.thesoftware.dev` once DNS propagates.  
-For local testing, map `127.0.0.1 api.thesoftware.dev` in `/etc/hosts` and use `http://localhost:8000`.
+The API is reachable at `https://api.bigalan.dev` once DNS propagates.  
+For local testing, map `127.0.0.1 api.bigalan.dev` in `/etc/hosts` and use `http://localhost:8000`.
 
 ---
 
@@ -185,7 +185,7 @@ curl -s -X POST http://localhost:8000/subdomains/myapp/origin \
 }
 ```
 
-After this, `https://myapp.thesoftware.dev` will proxy traffic to `http://203.0.113.10:8080`.
+After this, `https://myapp.bigalan.dev` will proxy traffic to `http://203.0.113.10:8080`.
 
 ---
 

@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, HttpUrl, field_validator
 
 # ---------------------------------------------------------------------------
 # Users
@@ -39,6 +39,16 @@ class CreditResponse(BaseModel):
     balance: int
 
     model_config = {"from_attributes": True}
+
+
+class CreditRequest(BaseModel):
+    user_id: uuid.UUID
+    message: str | None = Field(default=None, max_length=500, description="Optional message describing why credits are needed")
+
+
+class CreditRequestResponse(BaseModel):
+    user_id: uuid.UUID
+    webhooks_fired: int
 
 
 # ---------------------------------------------------------------------------
@@ -79,6 +89,11 @@ class SubdomainResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class SubdomainCheckResponse(BaseModel):
+    slug: str
+    available: bool
+
+
 # ---------------------------------------------------------------------------
 # Blocklist
 # ---------------------------------------------------------------------------
@@ -97,4 +112,39 @@ class BlocklistEntry(BaseModel):
 class BlocklistImportResult(BaseModel):
     imported: int
     mode: str
+
+
+# ---------------------------------------------------------------------------
+# Webhooks
+# ---------------------------------------------------------------------------
+
+class WebhookCreate(BaseModel):
+    url: HttpUrl
+    secret: str | None = Field(default=None, description="Optional HMAC-SHA256 signing secret")
+    events: list[str] = Field(default=["credit.request"], description="List of event types this webhook subscribes to")
+    active: bool = True
+
+
+class WebhookUpdate(BaseModel):
+    url: HttpUrl | None = None
+    secret: str | None = None
+    events: list[str] | None = None
+    active: bool | None = None
+
+
+class WebhookResponse(BaseModel):
+    id: uuid.UUID
+    url: str
+    events: list[str]
+    active: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+    @field_validator("events", mode="before")
+    @classmethod
+    def parse_events(cls, v: object) -> list[str]:
+        if isinstance(v, str):
+            return [e.strip() for e in v.split(",") if e.strip()]
+        return list(v)  # type: ignore[arg-type]
 

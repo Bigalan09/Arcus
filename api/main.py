@@ -5,7 +5,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
-from api.routes import admin, credits, subdomains, users
+from api.routes import admin, credits, subdomains, users, webhooks
 
 logging.basicConfig(
     level=logging.INFO,
@@ -14,7 +14,7 @@ logging.basicConfig(
 
 app = FastAPI(
     title="Arcus",
-    description="Subdomain-as-a-Service platform for thesoftware.dev",
+    description="Subdomain-as-a-Service platform for bigalan.dev",
     version="1.0.0",
 )
 
@@ -25,6 +25,7 @@ app.include_router(users.router)
 app.include_router(credits.router)
 app.include_router(subdomains.router)
 app.include_router(admin.router)
+app.include_router(webhooks.router)
 
 
 # ---------------------------------------------------------------------------

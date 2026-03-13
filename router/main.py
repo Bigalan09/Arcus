@@ -1,4 +1,4 @@
-"""Arcus Router – dynamic reverse proxy for *.thesoftware.dev.
+"""Arcus Router – dynamic reverse proxy for *.bigalan.dev.
 
 Role-based routing:
 * normal – Arcus-branded interstitial; cookie (_arcus_pass) or ?_arcus_skip=1 bypasses it.
@@ -27,7 +27,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://arcus:arcus@postgres:5432/arcus")
-BASE_DOMAIN = os.getenv("BASE_DOMAIN", "thesoftware.dev")
+BASE_DOMAIN = os.getenv("BASE_DOMAIN", "bigalan.dev")
 
 engine = create_async_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
@@ -95,7 +95,7 @@ _INTERSTITIAL_TEMPLATE = """\
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hosted on Arcus \u2013 thesoftware.dev</title>
+  <title>Hosted on Arcus \u2013 bigalan.dev</title>
   <style>
     *{{box-sizing:border-box;margin:0;padding:0}}
     body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
@@ -119,7 +119,7 @@ _INTERSTITIAL_TEMPLATE = """\
 <body>
   <div class="card">
     <div class="logo">Arcus</div>
-    <div class="tagline">thesoftware.dev</div>
+    <div class="tagline">bigalan.dev</div>
     <div class="msg">
       <strong class="slug">{slug}.{base_domain}</strong> is hosted on Arcus.<br>
       You are about to be redirected to this site.

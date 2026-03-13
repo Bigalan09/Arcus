@@ -10,7 +10,7 @@ import uuid
 import pytest_asyncio
 
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
-os.environ.setdefault("BASE_DOMAIN", "thesoftware.dev")
+os.environ.setdefault("BASE_DOMAIN", "bigalan.dev")
 
 from unittest.mock import AsyncMock
 
