@@ -216,3 +216,77 @@ async def test_list_webhooks_shows_all(client, admin_headers):
     urls = [w["url"] for w in resp.json()]
     assert "https://a.example.com/hook" in urls
     assert "https://b.example.com/hook" in urls
+
+
+# ---------------------------------------------------------------------------
+# User webhooks – credit.request admin-only restriction
+# ---------------------------------------------------------------------------
+
+PRO_WEBHOOK = {
+    "url": "https://pro.example.com/hook",
+    "events": ["user.created"],
+    "active": True,
+}
+
+
+@pytest.mark.asyncio
+async def test_pro_user_cannot_subscribe_credit_request(client, pro_user):
+    """POST /webhooks with credit.request event returns 403 for pro user."""
+    resp = await client.post(
+        "/webhooks",
+        json={**PRO_WEBHOOK, "events": ["credit.request"]},
+        headers=pro_user["headers"],
+    )
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_pro_user_cannot_include_credit_request_among_events(client, pro_user):
+    """POST /webhooks with credit.request mixed in with other events returns 403 for pro user."""
+    resp = await client.post(
+        "/webhooks",
+        json={**PRO_WEBHOOK, "events": ["user.created", "credit.request"]},
+        headers=pro_user["headers"],
+    )
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_pro_user_can_subscribe_to_other_events(client, pro_user):
+    """POST /webhooks with non-restricted events succeeds for a pro user."""
+    resp = await client.post(
+        "/webhooks",
+        json=PRO_WEBHOOK,
+        headers=pro_user["headers"],
+    )
+    assert resp.status_code == 201
+    assert resp.json()["events"] == ["user.created"]
+
+
+@pytest.mark.asyncio
+async def test_admin_can_create_credit_request_user_webhook(client, admin_headers):
+    """POST /webhooks with credit.request succeeds for admin user."""
+    resp = await client.post(
+        "/webhooks",
+        json={**PRO_WEBHOOK, "events": ["credit.request"]},
+        headers=admin_headers,
+    )
+    assert resp.status_code == 201
+    assert "credit.request" in resp.json()["events"]
+
+
+@pytest.mark.asyncio
+async def test_pro_user_cannot_update_webhook_to_credit_request(client, pro_user):
+    """PUT /webhooks/{id} updating events to credit.request returns 403 for pro user."""
+    # First create a valid webhook
+    create_resp = await client.post("/webhooks", json=PRO_WEBHOOK, headers=pro_user["headers"])
+    assert create_resp.status_code == 201
+    webhook_id = create_resp.json()["id"]
+
+    # Attempt to update events to include credit.request
+    resp = await client.put(
+        f"/webhooks/{webhook_id}",
+        json={"events": ["credit.request"]},
+        headers=pro_user["headers"],
+    )
+    assert resp.status_code == 403

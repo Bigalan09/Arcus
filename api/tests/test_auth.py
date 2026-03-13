@@ -12,7 +12,7 @@ async def test_setup_succeeds_when_no_admin(client):
     """POST /auth/setup creates the first admin and returns 201."""
     resp = await client.post(
         "/auth/setup",
-        json={"email": "admin@example.com", "password": "SecurePass1!"},
+        json={"email": "admin@example.com", "password": "setuptest12"},
     )
     assert resp.status_code == 201
     data = resp.json()
@@ -23,10 +23,10 @@ async def test_setup_succeeds_when_no_admin(client):
 @pytest.mark.asyncio
 async def test_setup_fails_if_admin_exists(client):
     """POST /auth/setup fails with 409 if admin already exists."""
-    await client.post("/auth/setup", json={"email": "admin@example.com", "password": "SecurePass1!"})
+    await client.post("/auth/setup", json={"email": "admin@example.com", "password": "setuptest12"})
     resp = await client.post(
         "/auth/setup",
-        json={"email": "admin2@example.com", "password": "SecurePass1!"},
+        json={"email": "admin2@example.com", "password": "setuptest12"},
     )
     assert resp.status_code == 409
 
@@ -42,7 +42,7 @@ async def test_setup_check_needed(client):
 @pytest.mark.asyncio
 async def test_setup_check_not_needed_after_creation(client):
     """GET /auth/setup-status returns needed=false after admin is created."""
-    await client.post("/auth/setup", json={"email": "admin@example.com", "password": "SecurePass1!"})
+    await client.post("/auth/setup", json={"email": "admin@example.com", "password": "setuptest12"})
     resp = await client.get("/auth/setup-status")
     assert resp.status_code == 200
     assert resp.json()["needed"] is False
@@ -56,10 +56,10 @@ async def test_setup_check_not_needed_after_creation(client):
 @pytest.mark.asyncio
 async def test_login_success(client):
     """POST /auth/login with valid credentials returns access_token."""
-    await client.post("/auth/setup", json={"email": "admin@example.com", "password": "SecurePass1!"})
+    await client.post("/auth/setup", json={"email": "admin@example.com", "password": "setuptest12"})
     resp = await client.post(
         "/auth/login",
-        json={"email": "admin@example.com", "password": "SecurePass1!"},
+        json={"email": "admin@example.com", "password": "setuptest12"},
     )
     assert resp.status_code == 200
     data = resp.json()
@@ -71,7 +71,7 @@ async def test_login_success(client):
 @pytest.mark.asyncio
 async def test_login_wrong_password(client):
     """POST /auth/login with wrong password returns 401."""
-    await client.post("/auth/setup", json={"email": "admin@example.com", "password": "SecurePass1!"})
+    await client.post("/auth/setup", json={"email": "admin@example.com", "password": "setuptest12"})
     resp = await client.post(
         "/auth/login",
         json={"email": "admin@example.com", "password": "wrongpassword"},
@@ -120,7 +120,7 @@ async def test_change_password_success(client, admin_token):
     """POST /auth/change-password with correct current password succeeds."""
     resp = await client.post(
         "/auth/change-password",
-        json={"current_password": "TestAdmin1!", "new_password": "NewSecurePass2!"},
+        json={"current_password": "testadmin12", "new_password": "newpassword99"},
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert resp.status_code == 204
@@ -131,7 +131,7 @@ async def test_change_password_wrong_current(client, admin_token):
     """POST /auth/change-password with wrong current password returns 401."""
     resp = await client.post(
         "/auth/change-password",
-        json={"current_password": "wrongpassword", "new_password": "NewSecurePass2!"},
+        json={"current_password": "wrongpassword", "new_password": "newpassword99"},
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert resp.status_code == 401
@@ -142,7 +142,7 @@ async def test_change_password_same_password(client, admin_token):
     """POST /auth/change-password with the same new password returns 400."""
     resp = await client.post(
         "/auth/change-password",
-        json={"current_password": "TestAdmin1!", "new_password": "TestAdmin1!"},
+        json={"current_password": "testadmin12", "new_password": "testadmin12"},
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert resp.status_code == 400
@@ -153,7 +153,7 @@ async def test_change_password_too_short(client, admin_token):
     """POST /auth/change-password with a short new password returns 422."""
     resp = await client.post(
         "/auth/change-password",
-        json={"current_password": "TestAdmin1!", "new_password": "short"},
+        json={"current_password": "testadmin12", "new_password": "short"},
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert resp.status_code == 422

@@ -32,6 +32,9 @@ from api.utils.deps import require_admin, require_pro_or_admin
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["webhooks"])
 
+# Events that only admins may subscribe to on user-owned webhooks
+ADMIN_ONLY_EVENTS: frozenset[str] = frozenset({"credit.request"})
+
 
 # ===========================================================================
 # Admin – system-wide webhooks
@@ -151,6 +154,13 @@ async def create_user_webhook(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a webhook subscription for the current user."""
+    if user.role != "admin":
+        restricted = ADMIN_ONLY_EVENTS.intersection(payload.events)
+        if restricted:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Only admins can subscribe to event(s): {', '.join(sorted(restricted))}.",
+            )
     events_str = ",".join(payload.events)
     webhook = Webhook(
         url=str(payload.url),
@@ -180,6 +190,14 @@ async def update_user_webhook(
     webhook = result.scalar_one_or_none()
     if webhook is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Webhook not found.")
+
+    if user.role != "admin" and payload.events is not None:
+        restricted = ADMIN_ONLY_EVENTS.intersection(payload.events)
+        if restricted:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Only admins can subscribe to event(s): {', '.join(sorted(restricted))}.",
+            )
 
     if payload.url is not None:
         webhook.url = str(payload.url)

@@ -37,12 +37,13 @@
         <tr class="text-gray-500 text-xs border-b border-gray-800">
           <th class="text-left py-2">Email</th>
           <th class="text-left py-2">Role</th>
+          <th class="text-left py-2">Credits</th>
           <th class="text-left py-2">Joined</th>
           <th class="py-2"></th>
         </tr>
       </thead>
       <tbody id="user-list">
-        <tr><td colspan="4" class="py-4 text-gray-500">Loading…</td></tr>
+        <tr><td colspan="5" class="py-4 text-gray-500">Loading…</td></tr>
       </tbody>
     </table>
   </section>
@@ -81,9 +82,20 @@
     const r = await api('/admin/users');
     if (!r) return;
     const users = await r.json();
+    // Fetch credits for each user in parallel
+    const creditMap = {};
+    await Promise.all(users.map(async u => {
+      const cr = await api(`/credits?user_id=${u.id}`);
+      if (cr && cr.ok) {
+        const cj = await cr.json();
+        creditMap[u.id] = cj.balance;
+      } else {
+        creditMap[u.id] = '–';
+      }
+    }));
     const tbody = document.getElementById('user-list');
     tbody.innerHTML = users.map(u => `
-      <tr class="border-b border-gray-800/50 hover:bg-gray-800/30">
+      <tr class="border-b border-gray-800/50 hover:bg-gray-800/30" id="user-row-${u.id}">
         <td class="py-2 pr-4">${u.email}</td>
         <td class="py-2 pr-4">
           <span class="text-xs px-2 py-0.5 rounded-full
@@ -91,12 +103,28 @@
               u.role === 'pro' ? 'bg-indigo-900/60 text-indigo-300' :
               'bg-gray-700 text-gray-400'}">${u.role}</span>
         </td>
+        <td class="py-2 pr-4 text-gray-300" id="credits-${u.id}">${creditMap[u.id]}</td>
         <td class="py-2 pr-4 text-gray-400 text-xs">${new Date(u.created_at).toLocaleDateString()}</td>
-        <td class="py-2">
+        <td class="py-2 flex gap-3">
+          <button onclick="grantCredits('${u.id}')"
+            class="text-xs text-green-400 hover:text-green-300">Grant credits</button>
           <button onclick="resetPassword('${u.id}', '${u.email}')"
             class="text-xs text-yellow-400 hover:text-yellow-300">Reset pwd</button>
         </td>
       </tr>`).join('');
+  }
+
+  async function grantCredits(userId) {
+    const amountStr = prompt('How many credits to grant?');
+    if (amountStr === null) return;
+    const amount = parseInt(amountStr, 10);
+    if (!amount || amount <= 0) { alert('Please enter a positive number.'); return; }
+    const r = await api('/credits/grant', { method: 'POST', body: JSON.stringify({ user_id: userId, amount }) });
+    if (!r) return;
+    if (!r.ok) { const j = await r.json(); alert(j.detail || 'Failed to grant credits.'); return; }
+    const j = await r.json();
+    const el = document.getElementById(`credits-${userId}`);
+    if (el) el.textContent = j.balance;
   }
 
   function showUserForm() {

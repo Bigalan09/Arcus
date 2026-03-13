@@ -33,7 +33,13 @@
   <!-- API Tokens -->
   <section class="bg-gray-900 rounded-xl p-5 border border-gray-800">
     <div class="flex items-center justify-between mb-4">
-      <h2 class="font-medium">API Tokens</h2>
+      <div>
+        <h2 class="font-medium">API Tokens</h2>
+        <p class="text-xs text-gray-500 mt-0.5">
+          Use tokens to authenticate API calls.
+          See <a href="/docs" target="_blank" class="text-indigo-400 hover:text-indigo-300 underline">API Docs</a> for usage.
+        </p>
+      </div>
       <button onclick="showCreateToken()"
         class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-3 py-1.5">
         New token
@@ -78,7 +84,14 @@
   <!-- Webhooks (pro/admin) -->
   <section class="bg-gray-900 rounded-xl p-5 border border-gray-800">
     <div class="flex items-center justify-between mb-4">
-      <h2 class="font-medium">Webhook Subscriptions</h2>
+      <div>
+        <h2 class="font-medium">Webhook Subscriptions</h2>
+        <p class="text-xs text-gray-500 mt-0.5">
+          Receive HTTP POST notifications for events.
+          See <a href="/docs" target="_blank" class="text-indigo-400 hover:text-indigo-300 underline">API Docs</a> for setup details.
+          {% if user.role != 'admin' %}<span class="text-yellow-500">Note: <code>credit.request</code> events are admin-only.</span>{% endif %}
+        </p>
+      </div>
       <button onclick="showWebhookForm()"
         class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-3 py-1.5">
         Add webhook
@@ -232,11 +245,15 @@
   }
 
   async function requestCredits() {
+    const amountStr = prompt('How many credits are you requesting?');
+    if (amountStr === null) return;
+    const amount = parseInt(amountStr, 10);
+    if (!amount || amount <= 0) { alert('Please enter a positive number of credits.'); return; }
     const msg = prompt('Optional message (why do you need credits)?');
     if (msg === null) return;
     const r = await api('/credits/request', {
       method: 'POST',
-      body: JSON.stringify({ user_id: {{ user.id | string | tojson }}, message: msg || null })
+      body: JSON.stringify({ user_id: {{ user.id | string | tojson }}, amount: amount, message: msg || null })
     });
     if (r && r.ok) alert('Request sent!');
   }
