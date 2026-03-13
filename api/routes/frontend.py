@@ -13,6 +13,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.config import settings
 from api.database import get_db
 from api.models import User
 from api.utils.deps import get_current_user_optional
@@ -25,6 +26,17 @@ templates = Jinja2Templates(directory="api/templates")
 
 def _render(request: Request, template: str, **ctx):
     return templates.TemplateResponse(request, template, ctx)
+
+
+def _redirect_local_ui_host(request: Request) -> RedirectResponse | None:
+    """Keep local browser pages on a single host so auth cookies stay consistent."""
+    if not settings.allow_private_origin_hosts or settings.base_domain != "localhost":
+        return None
+    if request.url.hostname != "localhost":
+        return None
+
+    query = f"?{request.url.query}" if request.url.query else ""
+    return RedirectResponse(f"http://api.localhost{request.url.path}{query}", status_code=307)
 
 
 async def _admin_exists(db: AsyncSession) -> bool:
@@ -40,10 +52,14 @@ async def _admin_exists(db: AsyncSession) -> bool:
 
 @router.get("/")
 async def root(
+    request: Request,
     arcus_session: str | None = Cookie(default=None),
     db: AsyncSession = Depends(get_db),
 ):
     """Redirect to dashboard if logged in, else to login (or setup if no admin)."""
+    redirect = _redirect_local_ui_host(request)
+    if redirect is not None:
+        return redirect
     if not await _admin_exists(db):
         return RedirectResponse("/setup", status_code=302)
     if arcus_session:
@@ -58,6 +74,9 @@ async def root(
 
 @router.get("/setup")
 async def setup_page(request: Request, db: AsyncSession = Depends(get_db)):
+    redirect = _redirect_local_ui_host(request)
+    if redirect is not None:
+        return redirect
     if await _admin_exists(db):
         return RedirectResponse("/login", status_code=302)
     return _render(request, "setup.html")
@@ -70,6 +89,9 @@ async def setup_page(request: Request, db: AsyncSession = Depends(get_db)):
 
 @router.get("/login")
 async def login_page(request: Request, setup: str = ""):
+    redirect = _redirect_local_ui_host(request)
+    if redirect is not None:
+        return redirect
     return _render(request, "login.html", setup_done=setup == "1")
 
 
@@ -84,6 +106,9 @@ async def change_password_page(
     arcus_session: str | None = Cookie(default=None),
     db: AsyncSession = Depends(get_db),
 ):
+    redirect = _redirect_local_ui_host(request)
+    if redirect is not None:
+        return redirect
     user = await get_current_user_optional(credentials=None, session_token=arcus_session, db=db)
     if user is None:
         return RedirectResponse("/login", status_code=302)
@@ -102,7 +127,9 @@ async def dashboard_page(
     arcus_session: str | None = Cookie(default=None),
     db: AsyncSession = Depends(get_db),
 ):
-    from api.config import settings
+    redirect = _redirect_local_ui_host(request)
+    if redirect is not None:
+        return redirect
 
     user = await get_current_user_optional(credentials=None, session_token=arcus_session, db=db)
     if user is None:
@@ -125,6 +152,9 @@ async def admin_page(
     arcus_session: str | None = Cookie(default=None),
     db: AsyncSession = Depends(get_db),
 ):
+    redirect = _redirect_local_ui_host(request)
+    if redirect is not None:
+        return redirect
     user = await get_current_user_optional(credentials=None, session_token=arcus_session, db=db)
     if user is None:
         return RedirectResponse("/login", status_code=302)
@@ -140,6 +170,9 @@ async def admin_user_page(
     arcus_session: str | None = Cookie(default=None),
     db: AsyncSession = Depends(get_db),
 ):
+    redirect = _redirect_local_ui_host(request)
+    if redirect is not None:
+        return redirect
     user = await get_current_user_optional(credentials=None, session_token=arcus_session, db=db)
     if user is None:
         return RedirectResponse("/login", status_code=302)

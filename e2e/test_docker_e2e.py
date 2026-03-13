@@ -124,6 +124,18 @@ async def test_docker_cookie_reauth_after_logout(http):
     assert me_3.status_code == 200
 
 
+@pytest.mark.asyncio
+async def test_docker_local_browser_pages_redirect_to_canonical_ui_host(http):
+    """Local-mode HTML routes redirect browser traffic from localhost to api.localhost."""
+    login = await http.get("/login?setup=1", headers={"host": "localhost:8000"}, follow_redirects=False)
+    dashboard = await http.get("/dashboard", headers={"host": "localhost:8000"}, follow_redirects=False)
+
+    assert login.status_code == 307
+    assert login.headers["location"] == "http://api.localhost/login?setup=1"
+    assert dashboard.status_code == 307
+    assert dashboard.headers["location"] == "http://api.localhost/dashboard"
+
+
 # ---------------------------------------------------------------------------
 # User management
 # ---------------------------------------------------------------------------

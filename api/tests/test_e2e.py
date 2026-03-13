@@ -34,6 +34,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from sqlalchemy import select
 
+from api.config import settings
 from api.models import User
 from api.tests.conftest import TestSessionLocal
 from api.utils.auth import hash_password
@@ -981,6 +982,19 @@ async def test_cookie_auth_relogin_after_logout(client):
 
     me_3 = await client.get("/auth/me")
     assert me_3.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_local_browser_pages_use_canonical_ui_host(client):
+    """Local HTML routes must stay on api.localhost to keep cookie scope stable."""
+    with patch.object(settings, "allow_private_origin_hosts", True), patch.object(settings, "base_domain", "localhost"):
+        login = await client.get("/login?setup=1", headers={"host": "localhost:8000"}, follow_redirects=False)
+        dashboard = await client.get("/dashboard", headers={"host": "localhost:8000"}, follow_redirects=False)
+
+    assert login.status_code == 307
+    assert login.headers["location"] == "http://api.localhost/login?setup=1"
+    assert dashboard.status_code == 307
+    assert dashboard.headers["location"] == "http://api.localhost/dashboard"
 
 
 # ===========================================================================

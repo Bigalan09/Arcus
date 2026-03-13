@@ -54,6 +54,7 @@ Useful URLs:
 - API health: [http://localhost:8000/health](http://localhost:8000/health)
 - Router health: [http://localhost:8001/health](http://localhost:8001/health)
 - Local edge API: [http://api.localhost/docs](http://api.localhost/docs)
+- Local UI: [http://api.localhost/login](http://api.localhost/login)
 
 Local development assumptions:
 
@@ -61,6 +62,7 @@ Local development assumptions:
 - Cloudflare and ACME are disabled locally
 - private, loopback, and LAN origin hosts are allowed locally
 - use `host.docker.internal` for services running on your host machine
+- browser sessions are canonicalised onto `api.localhost`; use `localhost:8000` for direct API access
 - production defaults remain strict
 
 ### 4) Stop
