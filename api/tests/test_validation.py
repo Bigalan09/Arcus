@@ -1,7 +1,10 @@
 """RED tests for validation utilities – must fail until implemented."""
 
+from unittest.mock import patch
+
 import pytest
 
+from api.config import settings
 from api.utils.validation import validate_origin_host
 
 # ---------------------------------------------------------------------------
@@ -49,3 +52,17 @@ def test_private_ip_rejected(addr):
 def test_invalid_hostname_rejected(bad):
     with pytest.raises(ValueError):
         validate_origin_host(bad)
+
+
+def test_loopback_allowed_when_local_dev_enabled():
+    with patch.object(settings, "allow_private_origin_hosts", True):
+        assert validate_origin_host("127.0.0.1") == "127.0.0.1"
+        assert validate_origin_host("192.168.1.20") == "192.168.1.20"
+
+
+def test_local_hostnames_allowed_when_local_dev_enabled():
+    with patch.object(settings, "allow_private_origin_hosts", True):
+        assert validate_origin_host("localhost") == "localhost"
+        assert validate_origin_host("host.docker.internal") == "host.docker.internal"
+        assert validate_origin_host("nas.local") == "nas.local"
+        assert validate_origin_host("lanbox") == "lanbox"

@@ -39,15 +39,17 @@
     try {
       const res = await fetch('/auth/login', {
         method: 'POST',
+        credentials: 'same-origin',
+        cache: 'no-store',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
       });
       if (res.ok) {
         const j = await res.json();
         if (j.must_change_password) {
-          window.location.href = '/change-password';
+          window.location.replace('/change-password');
         } else {
-          window.location.href = '/dashboard';
+          window.location.replace('/dashboard');
         }
       } else {
         err.textContent = await ui.parseApiError(res, 'Sign in failed.');

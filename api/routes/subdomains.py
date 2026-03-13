@@ -14,7 +14,7 @@ from api.models import Credit, Subdomain, User, Webhook
 from api.schemas import OriginSet, SubdomainCheckResponse, SubdomainPurchase, SubdomainResponse
 from api.utils.cloudflare import create_dns_record
 from api.utils.deps import get_current_user
-from api.utils.profanity import check_slug
+from api.utils.slug_policy import assess_slug
 from api.utils.validation import validate_origin_host
 from api.utils.webhooks import fire_webhooks
 
@@ -38,18 +38,20 @@ async def purchase_subdomain(
             detail="You can only purchase subdomains for your own account.",
         )
 
-    # Resolve and validate the target domain.
     domain = payload.domain or settings.primary_domain
-    configured = [d.domain for d in settings.configured_domains]
-    if domain not in configured:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Domain '{domain}' is not configured. Available: {configured}",
-        )
 
     target_user = await db.get(User, payload.user_id)
     if target_user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+
+    assessment = await assess_slug(payload.slug, domain, db)
+    if not assessment.available:
+        status_code = (
+            status.HTTP_409_CONFLICT
+            if assessment.reason == "taken"
+            else status.HTTP_422_UNPROCESSABLE_ENTITY
+        )
+        raise HTTPException(status_code=status_code, detail=assessment.detail)
 
     if target_user.role != "admin":
         result = await db.execute(select(Credit).where(Credit.user_id == payload.user_id))
@@ -60,12 +62,6 @@ async def purchase_subdomain(
                 detail="Insufficient credits. Please top up your balance to purchase a subdomain.",
             )
         credit.balance -= 1
-
-    try:
-        await check_slug(payload.slug, db)
-    except ValueError as exc:
-        await db.rollback()
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
     subdomain = Subdomain(user_id=payload.user_id, slug=payload.slug, domain=domain)
     db.add(subdomain)
@@ -152,10 +148,14 @@ async def check_subdomain(
     db: AsyncSession = Depends(get_db),
 ):
     """Check whether a subdomain slug is available for a given domain (public endpoint)."""
-    actual_domain = domain or settings.primary_domain
-    result = await db.execute(select(Subdomain).where(Subdomain.slug == slug, Subdomain.domain == actual_domain))
-    taken = result.scalar_one_or_none() is not None
-    return SubdomainCheckResponse(slug=slug, domain=actual_domain, available=not taken)
+    assessment = await assess_slug(slug, domain, db)
+    return SubdomainCheckResponse(
+        slug=assessment.slug,
+        domain=assessment.domain,
+        available=assessment.available,
+        reason=assessment.reason,
+        detail=assessment.detail,
+    )
 
 
 @router.get("", response_model=list[SubdomainResponse])

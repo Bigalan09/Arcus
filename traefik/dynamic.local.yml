@@ -1,0 +1,38 @@
+# Traefik dynamic configuration for local development.
+http:
+  routers:
+    arcus-api:
+      rule: "Host(`api.localhost`)"
+      entryPoints:
+        - web
+      priority: 100
+      service: arcus-api
+
+    arcus-wildcard:
+      rule: "HostRegexp(`^[a-z0-9]{3,32}\\.localhost$`)"
+      entryPoints:
+        - web
+      priority: 50
+      service: arcus-router
+      middlewares:
+        - rate-limit
+
+  services:
+    arcus-api:
+      loadBalancer:
+        servers:
+          - url: "http://api:8000"
+        passHostHeader: true
+
+    arcus-router:
+      loadBalancer:
+        servers:
+          - url: "http://router:8001"
+        passHostHeader: true
+
+  middlewares:
+    rate-limit:
+      rateLimit:
+        average: 100
+        burst: 50
+        period: 1s

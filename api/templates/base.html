@@ -354,8 +354,20 @@
     window.ui = ui;
 
     async function logout() {
-      await fetch('/auth/logout', { method: 'POST' });
-      window.location.href = '/login';
+      try {
+        const res = await fetch('/auth/logout', {
+          method: 'POST',
+          credentials: 'same-origin',
+          cache: 'no-store',
+        });
+        if (!res.ok) {
+          ui.toast(await ui.parseApiError(res, 'Sign out failed.'), 'error');
+          return;
+        }
+        window.location.replace('/login');
+      } catch (_) {
+        ui.toast('Sign out failed.', 'error');
+      }
     }
     setTimeout(() => {
       const f = document.getElementById('flash');

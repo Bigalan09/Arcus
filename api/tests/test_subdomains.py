@@ -1,6 +1,10 @@
 """Tests for subdomain routes."""
 
+from unittest.mock import patch
+
 import pytest
+
+from api.config import settings
 
 
 async def _setup_user_with_credits(client, admin_headers, email="subuser@example.com", credits=3):
@@ -138,6 +142,24 @@ async def test_set_origin_loopback_rejected(client, admin_headers):
         headers=admin_headers,
     )
     assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_set_origin_loopback_allowed_in_local_dev(client, admin_headers):
+    """Local development mode should allow loopback origins."""
+    user_id = await _setup_user_with_credits(client, admin_headers, "localorigin@example.com")
+    await client.post("/subdomains/purchase", json={"user_id": user_id, "slug": "localtest"}, headers=admin_headers)
+
+    with patch.object(settings, "allow_private_origin_hosts", True):
+        resp = await client.post(
+            "/subdomains/localtest/origin",
+            json={"origin_host": "127.0.0.1", "origin_port": 3000},
+            headers=admin_headers,
+        )
+
+    assert resp.status_code == 200
+    assert resp.json()["origin_host"] == "127.0.0.1"
+    assert resp.json()["origin_port"] == 3000
 
 
 @pytest.mark.asyncio
@@ -342,4 +364,3 @@ async def test_delete_subdomain_with_domain_param(client, admin_headers):
         # another.dev version still exists
         check = await client.get("/subdomains/check?slug=delslug&domain=another.dev")
         assert check.json()["available"] is False
-

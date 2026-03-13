@@ -1,4 +1,4 @@
-"""Arcus Router – dynamic reverse proxy for *.bigalan.dev.
+"""Arcus Router – dynamic reverse proxy for managed subdomains.
 
 Role-based routing:
 * normal – Arcus-branded interstitial; cookie (_arcus_pass) or ?_arcus_skip=1 bypasses it.
@@ -118,7 +118,7 @@ _INTERSTITIAL_TEMPLATE = """\
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hosted on Arcus \u2013 bigalan.dev</title>
+  <title>Hosted on Arcus \u2013 {base_domain}</title>
   <style>
     *{{box-sizing:border-box;margin:0;padding:0}}
     body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
@@ -142,7 +142,7 @@ _INTERSTITIAL_TEMPLATE = """\
 <body>
   <div class="card">
     <div class="logo">Arcus</div>
-    <div class="tagline">bigalan.dev</div>
+    <div class="tagline">{base_domain}</div>
     <div class="msg">
       <strong class="slug">{slug}.{base_domain}</strong> is hosted on Arcus.<br>
       You are about to be redirected to this site.

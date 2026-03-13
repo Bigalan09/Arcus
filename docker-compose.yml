@@ -31,10 +31,21 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql+asyncpg://arcus:${POSTGRES_PASSWORD:-arcus}@postgres:5432/arcus
-      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN}
-      CLOUDFLARE_ZONE_ID: ${CLOUDFLARE_ZONE_ID}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
+      CLOUDFLARE_ZONE_ID: ${CLOUDFLARE_ZONE_ID:-}
+      DOMAINS: ${DOMAINS:-}
       BASE_DOMAIN: ${BASE_DOMAIN:-bigalan.dev}
       API_SECRET_KEY: ${API_SECRET_KEY:-changeme}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change_me_jwt_secret}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-noreply@arcus.local}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
+      ALLOW_PRIVATE_ORIGIN_HOSTS: ${ALLOW_PRIVATE_ORIGIN_HOSTS:-false}
     depends_on:
       postgres:
         condition: service_healthy
@@ -45,7 +56,7 @@ services:
       retries: 5
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.api.rule=Host(`api.bigalan.dev`)"
+      - "traefik.http.routers.api.rule=Host(`api.${BASE_DOMAIN:-bigalan.dev}`)"
       - "traefik.http.routers.api.entrypoints=websecure"
       - "traefik.http.routers.api.tls.certresolver=letsencrypt"
       - "traefik.http.services.api.loadbalancer.server.port=8000"
@@ -62,6 +73,7 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql+asyncpg://arcus:${POSTGRES_PASSWORD:-arcus}@postgres:5432/arcus
+      DOMAINS: ${DOMAINS:-}
       BASE_DOMAIN: ${BASE_DOMAIN:-bigalan.dev}
     depends_on:
       postgres:
@@ -71,6 +83,15 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.arcus-wildcard.rule=HostRegexp(`^[a-z0-9]{3,32}\\.${BASE_DOMAIN:-bigalan.dev}$`)"
+      - "traefik.http.routers.arcus-wildcard.entrypoints=websecure"
+      - "traefik.http.routers.arcus-wildcard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.arcus-wildcard.tls.domains[0].main=${BASE_DOMAIN:-bigalan.dev}"
+      - "traefik.http.routers.arcus-wildcard.tls.domains[0].sans=*.${BASE_DOMAIN:-bigalan.dev}"
+      - "traefik.http.routers.arcus-wildcard.middlewares=rate-limit@file"
+      - "traefik.http.services.arcus-router.loadbalancer.server.port=8001"
     networks:
       - arcus
 

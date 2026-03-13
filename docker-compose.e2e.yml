@@ -10,6 +10,8 @@
 #
 # Exit code of the `e2e-tests` container reflects test success/failure.
 
+name: arcus-e2e
+
 services:
 
   # -------------------------------------------------------------------------

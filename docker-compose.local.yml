@@ -1,8 +1,28 @@
 services:
   api:
+    environment:
+      BASE_DOMAIN: localhost
+      DOMAINS: ""
+      CLOUDFLARE_API_TOKEN: ""
+      CLOUDFLARE_ZONE_ID: ""
+      ALLOW_PRIVATE_ORIGIN_HOSTS: "true"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8000:8000"
 
   router:
+    environment:
+      BASE_DOMAIN: localhost
+      DOMAINS: ""
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8001:8001"
+
+  traefik:
+    command:
+      - "--configFile=/etc/traefik/local/traefik.yml"
+    volumes:
+      - ./traefik/traefik.local.yml:/etc/traefik/local/traefik.yml:ro
+      - ./traefik/dynamic.local.yml:/etc/traefik/local/dynamic.yml:ro

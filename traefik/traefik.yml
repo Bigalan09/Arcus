@@ -28,7 +28,7 @@ entryPoints:
 certificatesResolvers:
   letsencrypt:
     acme:
-      email: "admin@bigalan.dev"
+      email: "admin@example.com"
       storage: "/letsencrypt/acme.json"
       dnsChallenge:
         provider: cloudflare
