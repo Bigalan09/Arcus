@@ -2,83 +2,77 @@
 {% block title %}Manage User – Arcus{% endblock %}
 {% block content %}
 <div class="space-y-6">
-  <div class="flex items-center justify-between">
-    <h1 class="text-2xl font-semibold">User management</h1>
-    <a href="/admin"
-       class="text-sm text-gray-400 hover:text-white border border-gray-700 rounded-lg px-3 py-1.5">
-      Back to admin
-    </a>
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h1 class="text-2xl font-semibold">Manage user</h1>
+      <p class="app-help mt-1">Role, access, password, and credit controls.</p>
+    </div>
+    <a href="/admin" class="app-btn app-btn-subtle">Back to admin</a>
   </div>
 
-  <section class="bg-gray-900 rounded-xl p-6 border border-gray-800 space-y-6">
+  <section class="app-card p-5 md:p-6 space-y-6">
     <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
       <div class="space-y-1">
         <p id="user-email" class="text-xl font-semibold break-all">{{ target_user.email }}</p>
-        <p class="text-xs text-gray-500">
-          Joined <span id="user-joined">{{ target_user.created_at }}</span>
-        </p>
+        <p class="text-sm text-gray-400">Joined <span id="user-joined">{{ target_user.created_at }}</span></p>
       </div>
-      <div class="inline-flex items-center gap-2">
-        <span class="text-xs text-gray-500">Status</span>
-        <span id="user-status" class="inline-flex items-center text-xs px-2.5 py-1 rounded-full border"></span>
-      </div>
+      <span id="user-status" class="app-pill"></span>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <label class="text-sm text-gray-300">
-        Role
-        <select id="user-role"
-          class="mt-1 w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
+      <div>
+        <label class="app-label" for="user-role">Role</label>
+        <select id="user-role" class="app-select">
           <option value="normal">Normal</option>
           <option value="pro">Pro</option>
           <option value="admin">Admin</option>
         </select>
-      </label>
-      <div class="rounded-lg border border-gray-800 bg-gray-950/40 px-4 py-3">
-        <label class="text-sm text-gray-300 flex items-center gap-2">
+      </div>
+      <div class="app-card-muted px-4 py-3">
+        <label class="inline-flex items-center gap-2 text-sm text-gray-200">
           <input id="user-active" type="checkbox" class="h-4 w-4 rounded border-gray-600 bg-gray-800 text-indigo-600">
           Active account
         </label>
-        <p class="text-xs text-gray-500 mt-2">Disabled accounts cannot sign in or use API tokens.</p>
+        <p class="app-help mt-2">Inactive users cannot sign in or use API tokens.</p>
       </div>
     </div>
 
-    <p id="user-note" class="hidden text-xs rounded-lg border border-yellow-900/60 bg-yellow-950/30 px-3 py-2 text-yellow-200"></p>
-    <p id="user-msg" class="hidden text-sm rounded-lg px-3 py-2"></p>
+    <p id="user-note" class="hidden app-alert"></p>
+    <p id="user-msg" class="hidden app-alert"></p>
 
-    <div class="flex flex-wrap items-center gap-3 pt-2 border-t border-gray-800">
-      <button onclick="saveUser()"
-        class="bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-4 py-2 text-sm">
-        Save changes
-      </button>
-      <button onclick="resetPassword()"
-        class="bg-gray-800 hover:bg-gray-700 text-gray-100 rounded-lg px-4 py-2 text-sm">
-        Reset password
-      </button>
-      <button id="toggle-active-btn" onclick="toggleActive()"
-        class="bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg px-4 py-2 text-sm">
-        Deactivate user
-      </button>
+    <div class="flex flex-wrap items-center gap-3 pt-2 border-t border-gray-800/80">
+      <button id="save-user-btn" type="button" onclick="saveUser()" class="app-btn app-btn-primary">Save changes</button>
+      <button id="reset-password-btn" type="button" onclick="resetPassword()" class="app-btn app-btn-secondary">Reset password</button>
+      <button id="toggle-active-btn" type="button" onclick="toggleActive()" class="app-btn app-btn-warning">Deactivate user</button>
     </div>
 
-    <div class="rounded-lg border border-red-900/50 bg-red-950/20 px-4 py-3 space-y-3">
-      <p class="text-xs text-red-200">Danger zone. This permanently removes the user and related records.</p>
-      <button id="delete-user-btn" onclick="deleteUser()"
-        class="bg-red-800 hover:bg-red-700 text-red-100 rounded-lg px-4 py-2 text-sm">
-        Delete user
-      </button>
+    <div class="rounded-lg border border-red-900/60 bg-red-950/15 px-4 py-4 space-y-3">
+      <p class="text-sm text-red-200">Danger zone: deleting removes the user and related records permanently.</p>
+      <button id="delete-user-btn" type="button" onclick="deleteUser()" class="app-btn app-btn-danger">Delete user</button>
     </div>
   </section>
 
-  <section id="credits-section" class="bg-gray-900 rounded-xl p-5 border border-gray-800 space-y-3">
-    <div class="flex items-center justify-between">
-      <h2 class="font-medium">Credits</h2>
-      <button onclick="grantCredits()"
-        class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-3 py-1.5">
-        Grant credits
-      </button>
+  <section id="credits-section" class="app-card p-5 md:p-6 space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 class="text-lg font-semibold">Credits</h2>
+        <p class="app-help mt-1">Admin users have unlimited credits and do not use this section.</p>
+      </div>
+      <button id="show-grant-form-btn" type="button" onclick="showGrantForm()" class="app-btn app-btn-primary">Grant credits</button>
     </div>
-    <p class="text-3xl font-bold" id="credits-balance">–</p>
+
+    <p class="text-3xl font-bold" id="credits-balance">-</p>
+
+    <div id="grant-form" class="hidden app-card-muted p-4 space-y-3">
+      <div>
+        <label class="app-label" for="grant-amount">Credits to add</label>
+        <input id="grant-amount" type="number" min="1" step="1" class="app-input" placeholder="10">
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <button id="grant-credits-btn" type="button" onclick="grantCredits()" class="app-btn app-btn-primary">Grant</button>
+        <button type="button" onclick="hideGrantForm()" class="app-btn app-btn-secondary">Cancel</button>
+      </div>
+    </div>
   </section>
 </div>
 {% endblock %}
@@ -89,48 +83,34 @@
   let currentRole = {{ target_user.role | tojson }};
   let currentActive = {{ target_user.active | tojson }};
 
-  function showMessage(text, type = 'error') {
-    const el = document.getElementById('user-msg');
+  function setAlert(elementId, text, type = 'error') {
+    const el = document.getElementById(elementId);
     el.textContent = text;
-    el.classList.remove(
-      'hidden',
-      'text-red-300',
-      'text-green-300',
-      'bg-red-950/30',
-      'bg-green-950/30',
-      'border',
-      'border-red-900/50',
-      'border-green-900/50',
-    );
-    el.classList.add('border');
-    if (type === 'success') {
-      el.classList.add('text-green-300', 'bg-green-950/30', 'border-green-900/50');
-    } else {
-      el.classList.add('text-red-300', 'bg-red-950/30', 'border-red-900/50');
-    }
+    el.classList.remove('hidden', 'app-alert-info', 'app-alert-success', 'app-alert-error', 'app-alert-warning');
+    el.classList.add(`app-alert-${type}`);
+  }
+
+  function hideAlert(elementId) {
+    document.getElementById(elementId).classList.add('hidden');
   }
 
   async function api(path, opts = {}) {
     const r = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
-    if (r.status === 401) { window.location.href = '/login'; return null; }
-    if (r.status === 403) { window.location.href = '/dashboard'; return null; }
-    return r;
-  }
-
-  async function responseError(r, fallback) {
-    try {
-      const body = await r.json();
-      if (typeof body.detail === 'string') return body.detail;
-      if (Array.isArray(body.detail) && body.detail.length && body.detail[0].msg) return body.detail[0].msg;
-      return fallback;
-    } catch (_) {
-      return fallback;
+    if (r.status === 401) {
+      window.location.href = '/login';
+      return null;
     }
+    if (r.status === 403) {
+      window.location.href = '/dashboard';
+      return null;
+    }
+    return r;
   }
 
   function applyUserState(user) {
     currentRole = user.role;
     currentActive = user.active;
+
     document.getElementById('user-email').textContent = user.email;
     document.getElementById('user-role').value = user.role;
     document.getElementById('user-active').checked = user.active;
@@ -138,48 +118,44 @@
 
     const status = document.getElementById('user-status');
     status.textContent = user.active ? 'active' : 'inactive';
-    status.className = `inline-flex items-center text-xs px-2.5 py-1 rounded-full border ${user.active ? 'bg-green-900/40 text-green-300 border-green-800' : 'bg-gray-800 text-gray-300 border-gray-700'}`;
+    status.className = `app-pill ${user.active ? 'bg-green-900/45 border-green-800 text-green-200' : 'bg-gray-800 border-gray-700 text-gray-300'}`;
 
     const note = document.getElementById('user-note');
-    const isSelf = TARGET_USER_ID === CURRENT_ADMIN_ID;
-    const isAdminTarget = user.role === 'admin';
     note.classList.add('hidden');
 
+    const roleInput = document.getElementById('user-role');
     const activeInput = document.getElementById('user-active');
     const toggleBtn = document.getElementById('toggle-active-btn');
     const deleteBtn = document.getElementById('delete-user-btn');
 
-    if (isSelf || isAdminTarget) {
+    const isSelf = TARGET_USER_ID === CURRENT_ADMIN_ID;
+    const isAdminTarget = user.role === 'admin';
+
+    roleInput.disabled = false;
+    activeInput.disabled = false;
+    toggleBtn.disabled = false;
+    deleteBtn.disabled = false;
+
+    if (isSelf) {
       activeInput.disabled = true;
       toggleBtn.disabled = true;
-      toggleBtn.classList.add('opacity-50', 'cursor-not-allowed');
       deleteBtn.disabled = true;
-      deleteBtn.classList.add('opacity-50', 'cursor-not-allowed');
-      if (isSelf) {
-        note.textContent = 'You cannot deactivate or delete your own account.';
-      } else {
-        note.textContent = 'Admin account cannot be deactivated or deleted.';
-      }
-      note.classList.remove('hidden');
-    } else {
-      activeInput.disabled = false;
-      toggleBtn.disabled = false;
-      toggleBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-      deleteBtn.disabled = false;
-      deleteBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+      setAlert('user-note', 'You cannot deactivate or delete your own account.', 'warning');
+    } else if (isAdminTarget) {
+      activeInput.disabled = true;
+      toggleBtn.disabled = true;
+      deleteBtn.disabled = true;
+      setAlert('user-note', 'Admin account cannot be deactivated or deleted.', 'warning');
     }
 
     toggleBtn.textContent = user.active ? 'Deactivate user' : 'Reactivate user';
-    toggleBtn.classList.remove('bg-yellow-700', 'hover:bg-yellow-600', 'text-yellow-100', 'bg-green-700', 'hover:bg-green-600', 'text-green-100');
-    if (user.active) {
-      toggleBtn.classList.add('bg-yellow-700', 'hover:bg-yellow-600', 'text-yellow-100');
-    } else {
-      toggleBtn.classList.add('bg-green-700', 'hover:bg-green-600', 'text-green-100');
-    }
+    toggleBtn.classList.remove('app-btn-warning', 'app-btn-secondary');
+    toggleBtn.classList.add(user.active ? 'app-btn-warning' : 'app-btn-secondary');
 
     const creditsSection = document.getElementById('credits-section');
     if (user.role === 'admin') {
       creditsSection.classList.add('hidden');
+      hideGrantForm();
     } else {
       creditsSection.classList.remove('hidden');
     }
@@ -189,19 +165,21 @@
     const r = await api(`/admin/users/${TARGET_USER_ID}`);
     if (!r) return;
     if (!r.ok) {
-      showMessage(await responseError(r, 'Failed to load user.'));
+      setAlert('user-msg', await ui.parseApiError(r, 'Failed to load user.'), 'error');
       return;
     }
     const user = await r.json();
     applyUserState(user);
-    if (user.role !== 'admin') await loadCredits();
+    if (user.role !== 'admin') {
+      await loadCredits();
+    }
   }
 
   async function loadCredits() {
     const r = await api(`/credits?user_id=${TARGET_USER_ID}`);
     if (!r) return;
     if (!r.ok) {
-      document.getElementById('credits-balance').textContent = '–';
+      document.getElementById('credits-balance').textContent = '-';
       return;
     }
     const j = await r.json();
@@ -209,81 +187,139 @@
   }
 
   async function saveUser() {
+    const btn = document.getElementById('save-user-btn');
     const role = document.getElementById('user-role').value;
     const active = document.getElementById('user-active').checked;
-    const r = await api(`/admin/users/${TARGET_USER_ID}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ role, active })
-    });
-    if (!r) return;
-    if (!r.ok) {
-      showMessage(await responseError(r, 'Failed to save user changes.'));
-      return;
+
+    ui.setButtonBusy(btn, true, 'Saving...');
+    try {
+      const r = await api(`/admin/users/${TARGET_USER_ID}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ role, active })
+      });
+      if (!r) return;
+      if (!r.ok) {
+        setAlert('user-msg', await ui.parseApiError(r, 'Failed to save user changes.'), 'error');
+        return;
+      }
+      setAlert('user-msg', 'User updated.', 'success');
+      await loadUser();
+    } finally {
+      ui.setButtonBusy(btn, false);
     }
-    showMessage('User updated.', 'success');
-    await loadUser();
   }
 
   async function toggleActive() {
-    const r = await api(`/admin/users/${TARGET_USER_ID}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ active: !currentActive })
-    });
-    if (!r) return;
-    if (!r.ok) {
-      showMessage(await responseError(r, 'Failed to update active state.'));
-      return;
+    const btn = document.getElementById('toggle-active-btn');
+    ui.setButtonBusy(btn, true, currentActive ? 'Deactivating...' : 'Reactivating...');
+    try {
+      const r = await api(`/admin/users/${TARGET_USER_ID}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ active: !currentActive })
+      });
+      if (!r) return;
+      if (!r.ok) {
+        setAlert('user-msg', await ui.parseApiError(r, 'Failed to update active state.'), 'error');
+        return;
+      }
+      setAlert('user-msg', 'User status updated.', 'success');
+      await loadUser();
+    } finally {
+      ui.setButtonBusy(btn, false);
     }
-    showMessage('User status updated.', 'success');
-    await loadUser();
   }
 
   async function resetPassword() {
-    if (!confirm('Reset password and email a new temporary password?')) return;
-    const r = await api(`/admin/users/${TARGET_USER_ID}/reset-password`, { method: 'POST' });
-    if (!r) return;
-    if (!(r.ok || r.status === 204)) {
-      showMessage(await responseError(r, 'Failed to reset password.'));
-      return;
+    const confirmed = await ui.confirmAction({
+      title: 'Reset password',
+      message: 'Generate a new temporary password and send it by email?',
+      confirmText: 'Reset password',
+      danger: false,
+    });
+    if (!confirmed) return;
+
+    const btn = document.getElementById('reset-password-btn');
+    ui.setButtonBusy(btn, true, 'Resetting...');
+    try {
+      const r = await api(`/admin/users/${TARGET_USER_ID}/reset-password`, { method: 'POST' });
+      if (!r) return;
+      if (!(r.ok || r.status === 204)) {
+        setAlert('user-msg', await ui.parseApiError(r, 'Failed to reset password.'), 'error');
+        return;
+      }
+      setAlert('user-msg', 'Password reset email sent.', 'success');
+    } finally {
+      ui.setButtonBusy(btn, false);
     }
-    showMessage('Password reset email sent.', 'success');
+  }
+
+  function showGrantForm() {
+    hideAlert('user-msg');
+    document.getElementById('grant-form').classList.remove('hidden');
+    document.getElementById('grant-amount').focus();
+  }
+
+  function hideGrantForm() {
+    document.getElementById('grant-form').classList.add('hidden');
+    document.getElementById('grant-amount').value = '';
   }
 
   async function grantCredits() {
-    const amountStr = prompt('How many credits to grant?');
-    if (amountStr === null) return;
-    const amount = parseInt(amountStr, 10);
-    if (!amount || amount <= 0) {
-      showMessage('Enter a positive number of credits.');
+    const amountValue = document.getElementById('grant-amount').value.trim();
+    const amount = parseInt(amountValue, 10);
+    if (!Number.isInteger(amount) || amount <= 0) {
+      setAlert('user-msg', 'Enter a positive credit amount.', 'error');
       return;
     }
-    const r = await api('/credits/grant', {
-      method: 'POST',
-      body: JSON.stringify({ user_id: TARGET_USER_ID, amount })
-    });
-    if (!r) return;
-    if (!r.ok) {
-      showMessage(await responseError(r, 'Failed to grant credits.'));
-      return;
+
+    const btn = document.getElementById('grant-credits-btn');
+    ui.setButtonBusy(btn, true, 'Granting...');
+    try {
+      const r = await api('/credits/grant', {
+        method: 'POST',
+        body: JSON.stringify({ user_id: TARGET_USER_ID, amount })
+      });
+      if (!r) return;
+      if (!r.ok) {
+        setAlert('user-msg', await ui.parseApiError(r, 'Failed to grant credits.'), 'error');
+        return;
+      }
+      hideGrantForm();
+      setAlert('user-msg', 'Credits granted.', 'success');
+      await loadCredits();
+    } finally {
+      ui.setButtonBusy(btn, false);
     }
-    showMessage('Credits granted.', 'success');
-    await loadCredits();
   }
 
   async function deleteUser() {
     if (TARGET_USER_ID === CURRENT_ADMIN_ID) {
-      showMessage('You cannot delete your own account.');
+      setAlert('user-msg', 'You cannot delete your own account.', 'error');
       return;
     }
+
     const email = document.getElementById('user-email').textContent;
-    if (!confirm(`Delete ${email}? This cannot be undone.`)) return;
-    const r = await api(`/admin/users/${TARGET_USER_ID}`, { method: 'DELETE' });
-    if (!r) return;
-    if (!(r.ok || r.status === 204)) {
-      showMessage(await responseError(r, 'Failed to delete user.'));
-      return;
+    const confirmed = await ui.confirmAction({
+      title: 'Delete user',
+      message: `Delete ${email}? This cannot be undone.`,
+      confirmText: 'Delete user',
+      danger: true,
+    });
+    if (!confirmed) return;
+
+    const btn = document.getElementById('delete-user-btn');
+    ui.setButtonBusy(btn, true, 'Deleting...');
+    try {
+      const r = await api(`/admin/users/${TARGET_USER_ID}`, { method: 'DELETE' });
+      if (!r) return;
+      if (!(r.ok || r.status === 204)) {
+        setAlert('user-msg', await ui.parseApiError(r, 'Failed to delete user.'), 'error');
+        return;
+      }
+      window.location.href = '/admin';
+    } finally {
+      ui.setButtonBusy(btn, false);
     }
-    window.location.href = '/admin';
   }
 
   loadUser();

@@ -2,159 +2,164 @@
 {% block title %}Dashboard – Arcus{% endblock %}
 {% block content %}
 <div class="space-y-8">
-  <!-- Header -->
-  <div class="flex items-center justify-between">
+  <div class="flex flex-wrap items-center justify-between gap-3">
     <div>
       <h1 class="text-2xl font-semibold">Dashboard</h1>
-      <p class="text-gray-400 text-sm mt-1">
+      <p class="text-sm text-gray-400 mt-1 flex items-center gap-2">
         {{ user.email }}
-        <span class="ml-2 inline-block text-xs px-2 py-0.5 rounded-full
-          {% if user.role == 'admin' %}bg-red-900/60 text-red-300
-          {% elif user.role == 'pro' %}bg-indigo-900/60 text-indigo-300
-          {% else %}bg-gray-800 text-gray-400{% endif %}">{{ user.role }}</span>
+        <span class="app-pill
+          {% if user.role == 'admin' %}bg-red-900/50 border-red-800 text-red-200
+          {% elif user.role == 'pro' %}bg-indigo-900/50 border-indigo-800 text-indigo-200
+          {% else %}bg-gray-800 border-gray-700 text-gray-300{% endif %}">{{ user.role }}</span>
       </p>
     </div>
-    <a href="/change-password"
-       class="text-sm text-gray-400 hover:text-white border border-gray-700 rounded-lg px-3 py-1.5">
-      Change password
-    </a>
+    <a href="/change-password" class="app-btn app-btn-subtle">Change password</a>
   </div>
 
   {% if user.role != 'admin' %}
-  <!-- Credits -->
-  <section class="bg-gray-900 rounded-xl p-5 border border-gray-800">
-    <div class="flex items-center justify-between mb-1">
-      <h2 class="font-medium">Credits</h2>
-      <button onclick="requestCredits()"
-        class="text-xs text-indigo-400 hover:text-indigo-300">Request more</button>
+  <section class="app-card p-5 md:p-6 space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 class="text-lg font-semibold">Credits</h2>
+        <p class="app-help mt-1">Purchase subdomains and other paid actions from this balance.</p>
+      </div>
+      <button id="show-credit-request-btn" type="button" onclick="showCreditRequestForm()" class="app-btn app-btn-primary">Request credits</button>
     </div>
-    <p class="text-3xl font-bold" id="balance">–</p>
+
+    <p class="text-3xl font-bold" id="balance">-</p>
+    <p id="credits-msg" class="hidden app-alert"></p>
+
+    <div id="credit-request-form" class="hidden app-card-muted p-4 space-y-3">
+      <div>
+        <label class="app-label" for="credit-request-amount">Amount</label>
+        <input id="credit-request-amount" type="number" min="1" step="1" class="app-input" placeholder="10">
+      </div>
+      <div>
+        <label class="app-label" for="credit-request-message">Reason (optional)</label>
+        <textarea id="credit-request-message" class="app-textarea" maxlength="500" placeholder="Tell the admin why these credits are needed"></textarea>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <button id="request-credit-btn" type="button" onclick="requestCredits()" class="app-btn app-btn-primary">Send request</button>
+        <button type="button" onclick="hideCreditRequestForm()" class="app-btn app-btn-secondary">Cancel</button>
+      </div>
+    </div>
   </section>
   {% endif %}
 
-  <!-- API Tokens -->
-  <section class="bg-gray-900 rounded-xl p-5 border border-gray-800">
-    <div class="flex items-center justify-between mb-4">
+  <section class="app-card p-5 md:p-6 space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h2 class="font-medium">API Tokens</h2>
-        <p class="text-xs text-gray-500 mt-0.5">
-          Use tokens to authenticate API calls.
-          See <a href="/docs" target="_blank" class="text-indigo-400 hover:text-indigo-300 underline">API Docs</a> for usage.
-        </p>
+        <h2 class="text-lg font-semibold">API tokens</h2>
+        <p class="app-help mt-1">Tokens expire automatically after 90 days. Use them for API authentication.</p>
       </div>
-      <button onclick="showCreateToken()"
-        class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-3 py-1.5">
-        New token
-      </button>
+      <button id="show-token-form-btn" type="button" onclick="showCreateToken()" class="app-btn app-btn-primary">New token</button>
     </div>
 
-    <!-- New token form (hidden by default) -->
-    <div id="token-form" class="hidden mb-4 space-y-3">
-      <input id="token-name" type="text" placeholder="Token name" maxlength="64"
-        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
-      <div class="flex gap-2">
-        <button onclick="createToken()"
-          class="bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-4 py-1.5 text-sm">Create</button>
-        <button onclick="hideCreateToken()"
-          class="bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg px-4 py-1.5 text-sm">Cancel</button>
+    <p id="token-msg" class="hidden app-alert"></p>
+
+    <div id="token-form" class="hidden app-card-muted p-4 space-y-3">
+      <div>
+        <label class="app-label" for="token-name">Token name</label>
+        <input id="token-name" type="text" maxlength="64" class="app-input" placeholder="e.g. CI deployment key">
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <button id="create-token-btn" type="button" onclick="createToken()" class="app-btn app-btn-primary">Create token</button>
+        <button type="button" onclick="hideCreateToken()" class="app-btn app-btn-secondary">Cancel</button>
       </div>
     </div>
 
-    <!-- Token reveal (shown once after creation) -->
-    <div id="token-reveal" class="hidden mb-4 bg-gray-800 rounded-lg p-4 border border-green-700">
-      <p class="text-xs text-green-400 mb-2">Copy this token – it won't be shown again.</p>
-      <code id="token-value" class="text-sm break-all text-green-300"></code>
-      <button onclick="document.getElementById('token-reveal').classList.add('hidden')"
-        class="mt-2 text-xs text-gray-400 hover:text-white block">Dismiss</button>
+    <div id="token-reveal" class="hidden app-alert app-alert-success space-y-2">
+      <p class="font-medium">Copy this token now. It will not be shown again.</p>
+      <code id="token-value" class="block break-all text-sm text-green-200 bg-green-950/25 border border-green-900/50 rounded px-3 py-2"></code>
+      <button type="button" onclick="document.getElementById('token-reveal').classList.add('hidden')" class="app-btn-link text-sm">Dismiss</button>
     </div>
 
-    <ul id="token-list" class="space-y-2 text-sm text-gray-300">
-      <li class="text-gray-500 text-sm">Loading…</li>
+    <ul id="token-list" class="space-y-2 text-sm text-gray-200">
+      <li class="app-empty">Loading...</li>
     </ul>
-    <p id="token-limit-msg" class="hidden text-xs text-gray-500 mt-3"></p>
+    <p id="token-limit-msg" class="app-help"></p>
   </section>
 
-  <!-- Subdomains -->
-  <section class="bg-gray-900 rounded-xl p-5 border border-gray-800">
-    <div class="flex items-center justify-between mb-4">
+  <section class="app-card p-5 md:p-6 space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h2 class="font-medium">Subdomains</h2>
-        <p class="text-xs text-gray-500 mt-0.5">
-          {% if user.role == 'admin' %}Admin subdomains are unlimited.{% else %}Each purchase costs 1 credit.{% endif %}
+        <h2 class="text-lg font-semibold">Subdomains</h2>
+        <p class="app-help mt-1">
+          {% if user.role == 'admin' %}Admin subdomains are unlimited.{% else %}Each new subdomain costs 1 credit.{% endif %}
         </p>
       </div>
-      <button onclick="showSubdomainForm()"
-        class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-3 py-1.5">
-        Add subdomain
-      </button>
+      <button type="button" onclick="showSubdomainForm()" class="app-btn app-btn-primary">Add subdomain</button>
     </div>
-    <div id="subdomain-form" class="hidden mb-4 space-y-3">
-      <input id="subdomain-slug" type="text" placeholder="Slug (3-32 chars: a-z, 0-9)" maxlength="32"
-        oninput="onSubdomainSlugInput()" onblur="onSubdomainSlugBlur()"
-        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
-      <div id="slug-availability" class="hidden rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-xs flex items-center gap-2">
+
+    <div id="subdomain-form" class="hidden app-card-muted p-4 space-y-3">
+      <div>
+        <label class="app-label" for="subdomain-slug">Slug</label>
+        <input id="subdomain-slug" type="text" maxlength="32" class="app-input" placeholder="3-32 chars: a-z, 0-9" oninput="onSubdomainSlugInput()" onblur="onSubdomainSlugBlur()">
+      </div>
+      <div id="slug-availability" class="hidden rounded-lg border border-gray-700 bg-gray-900/70 px-3 py-2 text-xs flex items-center gap-2">
         <span id="slug-availability-icon"></span>
         <span id="slug-availability-text"></span>
       </div>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <input id="subdomain-origin-host" type="text" placeholder="Origin host (optional)"
-          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
-        <input id="subdomain-origin-port" type="number" min="1" max="65535" placeholder="Origin port (optional)"
-          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="app-label" for="subdomain-origin-host">Origin host (optional)</label>
+          <input id="subdomain-origin-host" type="text" class="app-input" placeholder="127.0.0.1">
+        </div>
+        <div>
+          <label class="app-label" for="subdomain-origin-port">Origin port (optional)</label>
+          <input id="subdomain-origin-port" type="number" min="1" max="65535" class="app-input" placeholder="3000">
+        </div>
       </div>
-      <p class="text-xs text-gray-500">Set host + port now, or add/edit origin later per subdomain.</p>
-      <div class="flex gap-2">
-        <button onclick="createSubdomain()"
-          class="bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-4 py-1.5 text-sm">Purchase</button>
-        <button onclick="hideSubdomainForm()"
-          class="bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg px-4 py-1.5 text-sm">Cancel</button>
+      <p class="app-help">Provide host and port together to set origin immediately.</p>
+
+      <div class="flex flex-wrap items-center gap-2">
+        <button id="create-subdomain-btn" type="button" onclick="createSubdomain()" class="app-btn app-btn-primary">Create</button>
+        <button type="button" onclick="hideSubdomainForm()" class="app-btn app-btn-secondary">Cancel</button>
       </div>
     </div>
-    <p id="subdomain-msg" class="hidden text-sm mb-4"></p>
-    <ul id="subdomain-list" class="space-y-2 text-sm text-gray-300">
-      <li class="text-gray-500 text-sm">Loading…</li>
+
+    <p id="subdomain-msg" class="hidden app-alert"></p>
+
+    <ul id="subdomain-list" class="space-y-2 text-sm text-gray-200">
+      <li class="app-empty">Loading...</li>
     </ul>
   </section>
 
   {% if user.role in ('pro', 'admin') %}
-  <!-- Webhooks (pro/admin) -->
-  <section class="bg-gray-900 rounded-xl p-5 border border-gray-800">
-    <div class="flex items-center justify-between mb-4">
+  <section class="app-card p-5 md:p-6 space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h2 class="font-medium">Webhook Subscriptions</h2>
-        <p class="text-xs text-gray-500 mt-0.5">
-          Receive HTTP POST notifications for events.
-          See <a href="/docs" target="_blank" class="text-indigo-400 hover:text-indigo-300 underline">API Docs</a> for setup details.
-          {% if user.role != 'admin' %}<span class="text-yellow-500">Note: <code>credit.request</code> events are admin-only.</span>{% endif %}
-        </p>
+        <h2 class="text-lg font-semibold">Webhook subscriptions</h2>
+        <p class="app-help mt-1">Subscribe URLs to platform events. Multiple URLs can subscribe to the same event.</p>
       </div>
-      <button onclick="showWebhookForm()"
-        class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-3 py-1.5">
-        Add webhook
-      </button>
+      <button type="button" onclick="showWebhookForm()" class="app-btn app-btn-primary">Add webhook</button>
     </div>
-    <div id="webhook-form" class="hidden mb-4 space-y-3">
-      <input id="wh-reference" type="text" placeholder="Reference tag (unique, optional)"
-        maxlength="64"
-        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
-      <input id="wh-url" type="url" placeholder="https://example.com/hook"
-        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
-      <label class="block text-xs text-gray-500">
-        Events
-        <select id="wh-events"
-          multiple
-          class="mt-1 w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 min-h-28">
-        </select>
-      </label>
-      <div class="flex gap-2">
-        <button onclick="createWebhook()"
-          class="bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-4 py-1.5 text-sm">Save</button>
-        <button onclick="hideWebhookForm()"
-          class="bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg px-4 py-1.5 text-sm">Cancel</button>
+
+    <div id="webhook-form" class="hidden app-card-muted p-4 space-y-3">
+      <div>
+        <label class="app-label" for="wh-reference">Reference tag (optional, unique)</label>
+        <input id="wh-reference" type="text" maxlength="64" class="app-input" placeholder="billing-prod">
+      </div>
+      <div>
+        <label class="app-label" for="wh-url">Webhook URL</label>
+        <input id="wh-url" type="url" class="app-input" placeholder="https://example.com/hook">
+      </div>
+      <div>
+        <label class="app-label" for="wh-events">Events</label>
+        <select id="wh-events" multiple class="app-select min-h-28"></select>
+      </div>
+      <p class="app-help">Reference tag is sent as header <code>X-Arcus-Webhook-Ref</code>.</p>
+      <div class="flex flex-wrap items-center gap-2">
+        <button id="create-webhook-btn" type="button" onclick="createWebhook()" class="app-btn app-btn-primary">Save webhook</button>
+        <button type="button" onclick="hideWebhookForm()" class="app-btn app-btn-secondary">Cancel</button>
       </div>
     </div>
-    <ul id="webhook-list" class="space-y-2 text-sm text-gray-300">
-      <li class="text-gray-500 text-sm">Loading…</li>
+
+    <p id="webhook-msg" class="hidden app-alert"></p>
+
+    <ul id="webhook-list" class="space-y-2 text-sm text-gray-200">
+      <li class="app-empty">Loading...</li>
     </ul>
   </section>
   {% endif %}
@@ -166,103 +171,211 @@
   const USER_ID = {{ user.id | string | tojson }};
   const TOKEN_LIMITS = { normal: 1, pro: 5, admin: null };
   const SLUG_RE = /^[a-z0-9]{3,32}$/;
+  const SLUG_CHECK_MIN_INTERVAL_MS = 500;
+
   let slugCheckTimer = null;
   let lastSlugCheckAt = 0;
   let lastSlugChecked = '';
-  const SLUG_CHECK_MIN_INTERVAL_MS = 500;
+
+  function escapeHtml(value) {
+    return String(value)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+  }
+
+  function setAlert(id, text, type = 'error') {
+    const el = document.getElementById(id);
+    el.textContent = text;
+    el.classList.remove('hidden', 'app-alert-info', 'app-alert-success', 'app-alert-error', 'app-alert-warning');
+    el.classList.add(`app-alert-${type}`);
+  }
+
+  function hideAlert(id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('hidden');
+  }
 
   async function api(path, opts = {}) {
     const r = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
-    if (r.status === 401) { window.location.href = '/login'; return null; }
+    if (r.status === 401) {
+      window.location.href = '/login';
+      return null;
+    }
     return r;
   }
 
   async function loadBalance() {
+    if (ROLE === 'admin') return;
     const el = document.getElementById('balance');
     if (!el) return;
+
     const r = await api('/credits');
     if (!r) return;
-    if (r.ok) {
-      const j = await r.json();
-      el.textContent = j.balance;
+    if (!r.ok) {
+      setAlert('credits-msg', await ui.parseApiError(r, 'Failed to load balance.'), 'error');
+      return;
+    }
+
+    const j = await r.json();
+    el.textContent = j.balance;
+  }
+
+  function showCreditRequestForm() {
+    hideAlert('credits-msg');
+    document.getElementById('credit-request-form').classList.remove('hidden');
+    document.getElementById('credit-request-amount').focus();
+  }
+
+  function hideCreditRequestForm() {
+    const form = document.getElementById('credit-request-form');
+    if (!form) return;
+    form.classList.add('hidden');
+    document.getElementById('credit-request-amount').value = '';
+    document.getElementById('credit-request-message').value = '';
+  }
+
+  async function requestCredits() {
+    if (ROLE === 'admin') return;
+    const amount = parseInt(document.getElementById('credit-request-amount').value, 10);
+    const message = document.getElementById('credit-request-message').value.trim();
+    if (!Number.isInteger(amount) || amount <= 0) {
+      setAlert('credits-msg', 'Enter a positive number of credits.', 'error');
+      return;
+    }
+
+    const btn = document.getElementById('request-credit-btn');
+    ui.setButtonBusy(btn, true, 'Sending...');
+    try {
+      const r = await api('/credits/request', {
+        method: 'POST',
+        body: JSON.stringify({ user_id: USER_ID, amount, message: message || null })
+      });
+      if (!r) return;
+      if (!r.ok) {
+        setAlert('credits-msg', await ui.parseApiError(r, 'Failed to send credit request.'), 'error');
+        return;
+      }
+
+      hideCreditRequestForm();
+      setAlert('credits-msg', 'Credit request sent.', 'success');
+    } finally {
+      ui.setButtonBusy(btn, false);
     }
   }
 
   async function loadTokens() {
     const r = await api('/tokens');
     if (!r) return;
+    if (!r.ok) {
+      setAlert('token-msg', await ui.parseApiError(r, 'Failed to load tokens.'), 'error');
+      return;
+    }
+
     const tokens = await r.json();
     const list = document.getElementById('token-list');
-    const lim = TOKEN_LIMITS[ROLE];
+    const limit = TOKEN_LIMITS[ROLE];
+
     if (!tokens.length) {
-      list.innerHTML = '<li class="text-gray-500">No tokens yet.</li>';
+      list.innerHTML = '<li class="app-empty">No tokens created.</li>';
     } else {
-      list.innerHTML = tokens.map(t => `
-        <li class="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2">
-          <span>${t.name}</span>
-          <button onclick="revokeToken('${t.id}')" class="text-red-400 hover:text-red-300 text-xs ml-4">Revoke</button>
-        </li>`).join('');
+      list.innerHTML = tokens.map(t => {
+        const createdAt = new Date(t.created_at).toLocaleDateString();
+        const lastUsed = t.last_used_at ? new Date(t.last_used_at).toLocaleString() : 'Never used';
+        return `
+          <li class="app-card-muted px-3 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div class="min-w-0">
+              <p class="font-medium break-all">${escapeHtml(t.name)}</p>
+              <p class="app-help mt-1">Created ${createdAt} · Last used: ${escapeHtml(lastUsed)}</p>
+            </div>
+            <button type="button" onclick="revokeToken('${t.id}', this)" class="app-btn app-btn-subtle text-xs px-3 py-1.5">Revoke</button>
+          </li>`;
+      }).join('');
     }
-    const msg = document.getElementById('token-limit-msg');
-    const remaining = lim === null ? 'unlimited' : Math.max(lim - tokens.length, 0);
-    msg.textContent = `${tokens.length} created, ${remaining} remaining`;
-    msg.classList.remove('hidden');
+
+    const remaining = limit === null ? 'unlimited' : Math.max(limit - tokens.length, 0);
+    const limitMsg = document.getElementById('token-limit-msg');
+    limitMsg.textContent = `${tokens.length} created, ${remaining} remaining`;
+
+    const createBtn = document.getElementById('show-token-form-btn');
+    if (limit !== null && tokens.length >= limit) {
+      createBtn.disabled = true;
+      setAlert('token-msg', `Token limit reached (${limit}). Revoke one to create another.`, 'warning');
+      hideCreateToken();
+    } else {
+      createBtn.disabled = false;
+    }
   }
 
-  async function loadSubdomains() {
-    const r = await api('/subdomains');
-    if (!r) return;
-    const subs = await r.json();
-    const list = document.getElementById('subdomain-list');
-    if (!subs.length) {
-      list.innerHTML = '<li class="text-gray-500">No subdomains yet.</li>';
-    } else {
-      list.innerHTML = subs.map(s => `
-        <li class="bg-gray-800 rounded-lg px-3 py-3 space-y-3">
-          <div class="flex items-start justify-between gap-3">
-            <div>
-              <span class="font-mono">${s.slug}</span>
-              <p id="origin-text-${s.slug}" class="text-gray-400 text-xs mt-1">${s.origin_host ? s.origin_host + ':' + s.origin_port : 'No origin configured'}</p>
-            </div>
-            <div class="flex items-center gap-4">
-              <button onclick="toggleOriginForm('${s.slug}')"
-                class="text-xs text-indigo-300 hover:text-indigo-200 whitespace-nowrap border border-indigo-900/60 rounded px-2 py-1">
-                ${s.origin_host ? 'Edit origin' : 'Set origin'}
-              </button>
-              <button onclick="deleteSubdomain('${s.slug}')"
-                class="text-xs text-red-300 hover:text-red-200 whitespace-nowrap border border-red-900/60 rounded px-2 py-1">
-                Delete
-              </button>
-            </div>
-          </div>
-          <div id="origin-form-${s.slug}" class="hidden space-y-2">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <input id="origin-host-${s.slug}" type="text" placeholder="Origin host"
-                class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
-              <input id="origin-port-${s.slug}" type="number" min="1" max="65535" placeholder="Origin port"
-                class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
-            </div>
-            <div class="flex gap-2">
-              <button onclick="saveOrigin('${s.slug}')"
-                class="bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-3 py-1.5 text-xs">Save origin</button>
-              <button onclick="hideOriginForm('${s.slug}')"
-                class="bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg px-3 py-1.5 text-xs">Cancel</button>
-            </div>
-          </div>
-        </li>`).join('');
-      for (const s of subs) {
-        const hostInput = document.getElementById(`origin-host-${s.slug}`);
-        const portInput = document.getElementById(`origin-port-${s.slug}`);
-        if (hostInput) hostInput.value = s.origin_host || '';
-        if (portInput) portInput.value = s.origin_port || '';
+  function showCreateToken() {
+    hideAlert('token-msg');
+    document.getElementById('token-form').classList.remove('hidden');
+    document.getElementById('token-name').focus();
+  }
+
+  function hideCreateToken() {
+    const form = document.getElementById('token-form');
+    form.classList.add('hidden');
+    document.getElementById('token-name').value = '';
+  }
+
+  async function createToken() {
+    const name = document.getElementById('token-name').value.trim();
+    if (!name) {
+      setAlert('token-msg', 'Enter a token name.', 'error');
+      return;
+    }
+
+    const btn = document.getElementById('create-token-btn');
+    ui.setButtonBusy(btn, true, 'Creating...');
+    try {
+      const r = await api('/tokens', { method: 'POST', body: JSON.stringify({ name }) });
+      if (!r) return;
+      if (!r.ok) {
+        setAlert('token-msg', await ui.parseApiError(r, 'Failed to create token.'), 'error');
+        return;
       }
+
+      const j = await r.json();
+      document.getElementById('token-value').textContent = j.token;
+      document.getElementById('token-reveal').classList.remove('hidden');
+      hideCreateToken();
+      setAlert('token-msg', 'Token created.', 'success');
+      await loadTokens();
+    } finally {
+      ui.setButtonBusy(btn, false);
+    }
+  }
+
+  async function revokeToken(id, button) {
+    const confirmed = await ui.confirmAction({
+      title: 'Revoke token',
+      message: 'Revoke this API token immediately?',
+      confirmText: 'Revoke',
+      danger: true,
+    });
+    if (!confirmed) return;
+
+    ui.setButtonBusy(button, true, 'Revoking...');
+    try {
+      const r = await api('/tokens/' + id, { method: 'DELETE' });
+      if (!r) return;
+      if (!r.ok && r.status !== 204) {
+        setAlert('token-msg', await ui.parseApiError(r, 'Failed to revoke token.'), 'error');
+        return;
+      }
+
+      setAlert('token-msg', 'Token revoked.', 'success');
+      await loadTokens();
+    } finally {
+      ui.setButtonBusy(button, false);
     }
   }
 
   function showSubdomainForm() {
-    const msg = document.getElementById('subdomain-msg');
-    msg.classList.add('hidden');
-    msg.textContent = '';
+    hideAlert('subdomain-msg');
     document.getElementById('subdomain-form').classList.remove('hidden');
     document.getElementById('subdomain-slug').focus();
     updateSlugAvailability('neutral', 'Type a slug to check availability.');
@@ -273,8 +386,7 @@
     document.getElementById('subdomain-slug').value = '';
     document.getElementById('subdomain-origin-host').value = '';
     document.getElementById('subdomain-origin-port').value = '';
-    const panel = document.getElementById('slug-availability');
-    panel.classList.add('hidden');
+    document.getElementById('slug-availability').classList.add('hidden');
     if (slugCheckTimer) clearTimeout(slugCheckTimer);
   }
 
@@ -282,8 +394,9 @@
     const panel = document.getElementById('slug-availability');
     const icon = document.getElementById('slug-availability-icon');
     const label = document.getElementById('slug-availability-text');
-    panel.classList.remove('hidden');
-    panel.classList.remove('border-green-700', 'border-red-700', 'border-gray-700', 'text-green-300', 'text-red-300', 'text-gray-300');
+
+    panel.classList.remove('hidden', 'border-green-700', 'border-red-700', 'border-gray-700', 'text-green-300', 'text-red-300', 'text-gray-300');
+
     if (state === 'available') {
       icon.innerHTML = '&#10003;';
       panel.classList.add('border-green-700', 'text-green-300');
@@ -297,6 +410,7 @@
       icon.textContent = '-';
       panel.classList.add('border-gray-700', 'text-gray-300');
     }
+
     label.textContent = text;
   }
 
@@ -326,6 +440,7 @@
     const j = await r.json();
     lastSlugChecked = slug;
     lastSlugCheckAt = Date.now();
+
     if (j.available) {
       updateSlugAvailability('available', `'${slug}' is available.`);
       return { ok: true, available: true };
@@ -338,12 +453,15 @@
   function onSubdomainSlugInput() {
     const slug = document.getElementById('subdomain-slug').value.trim().toLowerCase();
     if (slugCheckTimer) clearTimeout(slugCheckTimer);
+
     if (!slug) {
-      const panel = document.getElementById('slug-availability');
-      panel.classList.add('hidden');
+      document.getElementById('slug-availability').classList.add('hidden');
       return;
     }
-    slugCheckTimer = setTimeout(() => checkSlugAvailability(slug), 250);
+
+    slugCheckTimer = setTimeout(() => {
+      checkSlugAvailability(slug);
+    }, 250);
   }
 
   function onSubdomainSlugBlur() {
@@ -353,96 +471,152 @@
     checkSlugAvailability(slug, true);
   }
 
-  function showSubdomainMessage(text, type = 'error') {
-    const msg = document.getElementById('subdomain-msg');
-    msg.textContent = text;
-    msg.classList.remove('hidden', 'text-red-400', 'text-green-400');
-    msg.classList.add(type === 'success' ? 'text-green-400' : 'text-red-400');
-  }
-
-  async function responseError(r, fallback) {
-    try {
-      const body = await r.json();
-      if (typeof body.detail === 'string') return body.detail;
-      if (Array.isArray(body.detail) && body.detail.length && body.detail[0].msg) return body.detail[0].msg;
-      return fallback;
-    } catch (_) {
-      return fallback;
-    }
+  async function setOrigin(slug, originHost, originPort) {
+    const r = await api(`/subdomains/${encodeURIComponent(slug)}/origin`, {
+      method: 'POST',
+      body: JSON.stringify({ origin_host: originHost, origin_port: originPort })
+    });
+    if (!r) return { ok: false, detail: 'Authentication required.' };
+    if (!r.ok) return { ok: false, detail: await ui.parseApiError(r, 'Could not update origin.') };
+    return { ok: true };
   }
 
   async function createSubdomain() {
+    const createBtn = document.getElementById('create-subdomain-btn');
     const slugInput = document.getElementById('subdomain-slug');
+    const hostInput = document.getElementById('subdomain-origin-host');
+    const portInput = document.getElementById('subdomain-origin-port');
+
     const slug = slugInput.value.trim().toLowerCase();
-    const originHostInput = document.getElementById('subdomain-origin-host');
-    const originPortInput = document.getElementById('subdomain-origin-port');
-    const originHost = originHostInput.value.trim();
-    const originPortRaw = originPortInput.value.trim();
+    const originHost = hostInput.value.trim();
+    const originPortRaw = portInput.value.trim();
     slugInput.value = slug;
 
     if (!SLUG_RE.test(slug)) {
-      showSubdomainMessage('Use 3-32 lowercase letters or numbers only.');
+      setAlert('subdomain-msg', 'Use 3-32 lowercase letters or numbers only.', 'error');
       return;
     }
     if ((originHost && !originPortRaw) || (!originHost && originPortRaw)) {
-      showSubdomainMessage('To set origin now, provide both host and port.');
+      setAlert('subdomain-msg', 'To set origin now, provide both host and port.', 'error');
       return;
     }
+
     let originPort = null;
     if (originHost && originPortRaw) {
       originPort = parseInt(originPortRaw, 10);
       if (!Number.isInteger(originPort) || originPort < 1 || originPort > 65535) {
-        showSubdomainMessage('Origin port must be between 1 and 65535.');
+        setAlert('subdomain-msg', 'Origin port must be between 1 and 65535.', 'error');
         return;
       }
     }
 
-    const availability = await checkSlugAvailability(slug, true);
-    if (!availability.ok || !availability.available) {
-      showSubdomainMessage(availability.detail || `'${slug}' is not available.`);
-      return;
-    }
+    ui.setButtonBusy(createBtn, true, 'Creating...');
+    try {
+      const availability = await checkSlugAvailability(slug, true);
+      if (!availability.ok || !availability.available) {
+        setAlert('subdomain-msg', availability.detail || `'${slug}' is not available.`, 'error');
+        return;
+      }
 
-    const r = await api('/subdomains/purchase', {
-      method: 'POST',
-      body: JSON.stringify({ user_id: USER_ID, slug })
-    });
+      const r = await api('/subdomains/purchase', {
+        method: 'POST',
+        body: JSON.stringify({ user_id: USER_ID, slug })
+      });
+      if (!r) return;
+      if (!r.ok) {
+        setAlert('subdomain-msg', await ui.parseApiError(r, 'Could not create subdomain.'), 'error');
+        return;
+      }
+
+      if (originHost && originPort !== null) {
+        const originResult = await setOrigin(slug, originHost, originPort);
+        if (!originResult.ok) {
+          hideSubdomainForm();
+          setAlert('subdomain-msg', `Subdomain '${slug}' created, but origin failed: ${originResult.detail}`, 'warning');
+          await Promise.all([loadSubdomains(), loadBalance()]);
+          return;
+        }
+      }
+
+      hideSubdomainForm();
+      setAlert('subdomain-msg', `Subdomain '${slug}' created.`, 'success');
+      await Promise.all([loadSubdomains(), loadBalance()]);
+    } finally {
+      ui.setButtonBusy(createBtn, false);
+    }
+  }
+
+  async function loadSubdomains() {
+    const r = await api('/subdomains');
     if (!r) return;
     if (!r.ok) {
-      const detail = await responseError(r, 'Could not purchase subdomain.');
-      showSubdomainMessage(detail);
+      setAlert('subdomain-msg', await ui.parseApiError(r, 'Failed to load subdomains.'), 'error');
       return;
     }
 
-    if (originHost && originPort !== null) {
-      const setResult = await setOrigin(slug, originHost, originPort);
-      if (!setResult.ok) {
-        hideSubdomainForm();
-        showSubdomainMessage(`Subdomain '${slug}' created, but origin failed: ${setResult.detail}`);
-        await Promise.all([loadSubdomains(), loadBalance()]);
-        return;
-      }
-      hideSubdomainForm();
-      showSubdomainMessage(`Subdomain '${slug}' created and origin set.`, 'success');
-      await Promise.all([loadSubdomains(), loadBalance()]);
+    const subs = await r.json();
+    const list = document.getElementById('subdomain-list');
+    if (!subs.length) {
+      list.innerHTML = '<li class="app-empty">No subdomains created.</li>';
       return;
     }
 
-    hideSubdomainForm();
-    showSubdomainMessage(`Subdomain '${slug}' created.`, 'success');
-    await Promise.all([loadSubdomains(), loadBalance()]);
+    list.innerHTML = subs.map(s => {
+      const slug = escapeHtml(s.slug);
+      const originText = s.origin_host ? `${escapeHtml(s.origin_host)}:${escapeHtml(s.origin_port)}` : 'No origin configured';
+      const originButtonLabel = s.origin_host ? 'Edit origin' : 'Set origin';
+      return `
+        <li class="app-card-muted px-3 py-3 space-y-3">
+          <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div>
+              <p class="font-mono text-base">${slug}</p>
+              <p class="app-help mt-1" id="origin-text-${slug}">${originText}</p>
+            </div>
+            <div class="flex items-center gap-3">
+              <button type="button" onclick="toggleOriginForm('${slug}')" class="app-btn app-btn-subtle text-xs px-3 py-1.5">${originButtonLabel}</button>
+              <button type="button" onclick="deleteSubdomain('${slug}', this)" class="app-btn app-btn-danger text-xs px-3 py-1.5">Delete</button>
+            </div>
+          </div>
+
+          <div id="origin-form-${slug}" class="hidden app-card p-3 space-y-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="app-label" for="origin-host-${slug}">Origin host</label>
+                <input id="origin-host-${slug}" type="text" class="app-input" placeholder="127.0.0.1">
+              </div>
+              <div>
+                <label class="app-label" for="origin-port-${slug}">Origin port</label>
+                <input id="origin-port-${slug}" type="number" min="1" max="65535" class="app-input" placeholder="3000">
+              </div>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <button type="button" onclick="saveOrigin('${slug}', this)" class="app-btn app-btn-primary text-xs px-3 py-1.5">Save origin</button>
+              <button type="button" onclick="hideOriginForm('${slug}')" class="app-btn app-btn-secondary text-xs px-3 py-1.5">Cancel</button>
+            </div>
+          </div>
+        </li>`;
+    }).join('');
+
+    for (const s of subs) {
+      const hostInput = document.getElementById(`origin-host-${s.slug}`);
+      const portInput = document.getElementById(`origin-port-${s.slug}`);
+      if (hostInput) hostInput.value = s.origin_host || '';
+      if (portInput) portInput.value = s.origin_port || '';
+    }
   }
 
   function toggleOriginForm(slug) {
     const form = document.getElementById(`origin-form-${slug}`);
     if (!form) return;
-    const isHidden = form.classList.contains('hidden');
-    if (isHidden) {
+
+    const hidden = form.classList.contains('hidden');
+    if (hidden) {
       form.classList.remove('hidden');
-      const host = document.getElementById(`origin-host-${slug}`);
-      if (host) host.focus();
+      const input = document.getElementById(`origin-host-${slug}`);
+      if (input) input.focus();
       return;
     }
+
     form.classList.add('hidden');
   }
 
@@ -451,181 +625,195 @@
     if (form) form.classList.add('hidden');
   }
 
-  async function setOrigin(slug, originHost, originPort) {
-    const r = await api(`/subdomains/${encodeURIComponent(slug)}/origin`, {
-      method: 'POST',
-      body: JSON.stringify({ origin_host: originHost, origin_port: originPort })
+  async function saveOrigin(slug, button) {
+    const host = document.getElementById(`origin-host-${slug}`).value.trim();
+    const portRaw = document.getElementById(`origin-port-${slug}`).value.trim();
+
+    if (!host || !portRaw) {
+      setAlert('subdomain-msg', 'Origin host and port are required.', 'error');
+      return;
+    }
+
+    const port = parseInt(portRaw, 10);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      setAlert('subdomain-msg', 'Origin port must be between 1 and 65535.', 'error');
+      return;
+    }
+
+    ui.setButtonBusy(button, true, 'Saving...');
+    try {
+      const result = await setOrigin(slug, host, port);
+      if (!result.ok) {
+        setAlert('subdomain-msg', result.detail, 'error');
+        return;
+      }
+
+      hideOriginForm(slug);
+      setAlert('subdomain-msg', `Origin updated for '${slug}'.`, 'success');
+      await loadSubdomains();
+    } finally {
+      ui.setButtonBusy(button, false);
+    }
+  }
+
+  async function deleteSubdomain(slug, button) {
+    const confirmed = await ui.confirmAction({
+      title: 'Delete subdomain',
+      message: `Delete '${slug}'?`,
+      confirmText: 'Delete',
+      danger: true,
     });
-    if (!r) return { ok: false, detail: 'Authentication required.' };
-    if (!r.ok) {
-      const detail = await responseError(r, 'Could not update origin.');
-      return { ok: false, detail };
-    }
-    return { ok: true };
-  }
+    if (!confirmed) return;
 
-  async function saveOrigin(slug) {
-    const hostInput = document.getElementById(`origin-host-${slug}`);
-    const portInput = document.getElementById(`origin-port-${slug}`);
-    const originHost = hostInput.value.trim();
-    const portRaw = portInput.value.trim();
-    if (!originHost || !portRaw) {
-      showSubdomainMessage('Origin host and port are required.');
-      return;
-    }
-    const originPort = parseInt(portRaw, 10);
-    if (!Number.isInteger(originPort) || originPort < 1 || originPort > 65535) {
-      showSubdomainMessage('Origin port must be between 1 and 65535.');
-      return;
-    }
+    ui.setButtonBusy(button, true, 'Deleting...');
+    try {
+      const r = await api(`/subdomains/${encodeURIComponent(slug)}`, { method: 'DELETE' });
+      if (!r) return;
+      if (!r.ok && r.status !== 204) {
+        setAlert('subdomain-msg', await ui.parseApiError(r, 'Could not delete subdomain.'), 'error');
+        return;
+      }
 
-    const setResult = await setOrigin(slug, originHost, originPort);
-    if (!setResult.ok) {
-      showSubdomainMessage(setResult.detail);
-      return;
-    }
-
-    hideOriginForm(slug);
-    showSubdomainMessage(`Origin updated for '${slug}'.`, 'success');
-    await loadSubdomains();
-  }
-
-  async function deleteSubdomain(slug) {
-    if (!confirm(`Delete subdomain '${slug}'?`)) return;
-    const r = await api(`/subdomains/${encodeURIComponent(slug)}`, { method: 'DELETE' });
-    if (!r) return;
-    if (!r.ok && r.status !== 204) {
-      showSubdomainMessage(await responseError(r, 'Could not delete subdomain.'));
-      return;
-    }
-    showSubdomainMessage(`Subdomain '${slug}' deleted.`, 'success');
-    await Promise.all([loadSubdomains(), loadBalance()]);
-  }
-
-  async function loadWebhooks() {
-    if (!['pro', 'admin'].includes(ROLE)) return;
-    const r = await api('/webhooks');
-    if (!r) return;
-    const hooks = await r.json();
-    const list = document.getElementById('webhook-list');
-    if (!hooks.length) {
-      list.innerHTML = '<li class="text-gray-500">No webhooks yet.</li>';
-    } else {
-      list.innerHTML = hooks.map(h => `
-        <li class="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2 gap-3">
-          <div class="min-w-0">
-            <p class="font-mono text-xs truncate">${h.url}</p>
-            <p class="text-[11px] text-gray-400 mt-1">
-              ref: <span class="font-mono">${h.reference || 'none'}</span>
-              <span class="mx-2">|</span>
-              events: ${h.events.join(', ')}
-            </p>
-          </div>
-          <button onclick="deleteWebhook('${h.id}')" class="text-red-400 hover:text-red-300 text-xs ml-4">Delete</button>
-        </li>`).join('');
+      setAlert('subdomain-msg', `Subdomain '${slug}' deleted.`, 'success');
+      await Promise.all([loadSubdomains(), loadBalance()]);
+    } finally {
+      ui.setButtonBusy(button, false);
     }
   }
 
   async function loadWebhookEvents() {
     if (!['pro', 'admin'].includes(ROLE)) return;
+
     const r = await api('/webhooks/events');
     if (!r) return;
-    if (!r.ok) return;
+    if (!r.ok) {
+      setAlert('webhook-msg', await ui.parseApiError(r, 'Failed to load webhook events.'), 'error');
+      return;
+    }
+
     const events = await r.json();
     const select = document.getElementById('wh-events');
-    select.innerHTML = events.map(e => `<option value="${e.key}">${e.label}${e.admin_only ? ' (admin only)' : ''}</option>`).join('');
-    if (events.length > 0) {
+    select.innerHTML = events
+      .map(e => `<option value="${escapeHtml(e.key)}">${escapeHtml(e.label)}${e.admin_only ? ' (admin only)' : ''}</option>`)
+      .join('');
+
+    if (events.length) {
       select.options[0].selected = true;
     }
   }
 
-  function showCreateToken() {
-    document.getElementById('token-form').classList.remove('hidden');
-    document.getElementById('token-name').focus();
-  }
-  function hideCreateToken() {
-    document.getElementById('token-form').classList.add('hidden');
-    document.getElementById('token-name').value = '';
-  }
+  async function loadWebhooks() {
+    if (!['pro', 'admin'].includes(ROLE)) return;
 
-  async function createToken() {
-    const name = document.getElementById('token-name').value.trim();
-    if (!name) return;
-    const r = await api('/tokens', { method: 'POST', body: JSON.stringify({ name }) });
+    const r = await api('/webhooks');
     if (!r) return;
-    if (r.status === 409) {
-      alert((await r.json()).detail);
+    if (!r.ok) {
+      setAlert('webhook-msg', await ui.parseApiError(r, 'Failed to load webhooks.'), 'error');
       return;
     }
-    const j = await r.json();
-    document.getElementById('token-value').textContent = j.token;
-    document.getElementById('token-reveal').classList.remove('hidden');
-    hideCreateToken();
-    loadTokens();
-  }
 
-  async function revokeToken(id) {
-    if (!confirm('Revoke this token?')) return;
-    await api('/tokens/' + id, { method: 'DELETE' });
-    loadTokens();
+    const hooks = await r.json();
+    const list = document.getElementById('webhook-list');
+    if (!hooks.length) {
+      list.innerHTML = '<li class="app-empty">No webhooks configured.</li>';
+      return;
+    }
+
+    list.innerHTML = hooks.map(h => {
+      const url = escapeHtml(h.url);
+      const ref = h.reference ? escapeHtml(h.reference) : 'none';
+      const events = h.events.map(escapeHtml).join(', ');
+      return `
+        <li class="app-card-muted px-3 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div class="min-w-0">
+            <p class="font-mono text-xs truncate">${url}</p>
+            <p class="app-help mt-1">ref: <span class="font-mono">${ref}</span> · events: ${events}</p>
+          </div>
+          <button type="button" onclick="deleteWebhook('${h.id}', this)" class="app-btn app-btn-danger text-xs px-3 py-1.5">Delete</button>
+        </li>`;
+    }).join('');
   }
 
   function showWebhookForm() {
+    hideAlert('webhook-msg');
     document.getElementById('webhook-form').classList.remove('hidden');
+    document.getElementById('wh-url').focus();
     if (!document.getElementById('wh-events').options.length) {
       loadWebhookEvents();
     }
-    document.getElementById('wh-url').focus();
   }
 
   function hideWebhookForm() {
     document.getElementById('webhook-form').classList.add('hidden');
     document.getElementById('wh-reference').value = '';
     document.getElementById('wh-url').value = '';
+    const options = document.getElementById('wh-events').options;
+    for (let i = 0; i < options.length; i += 1) {
+      options[i].selected = false;
+    }
+    if (options.length > 0) {
+      options[0].selected = true;
+    }
   }
 
   async function createWebhook() {
     const reference = document.getElementById('wh-reference').value.trim();
     const url = document.getElementById('wh-url').value.trim();
-    const eventsSelect = document.getElementById('wh-events');
-    const events = Array.from(eventsSelect.selectedOptions).map(opt => opt.value);
-    if (!url) return;
-    if (!events.length) {
-      alert('Select at least one event.');
+    const events = Array.from(document.getElementById('wh-events').selectedOptions).map(opt => opt.value);
+
+    if (!url) {
+      setAlert('webhook-msg', 'Webhook URL is required.', 'error');
       return;
     }
+    if (!events.length) {
+      setAlert('webhook-msg', 'Select at least one webhook event.', 'error');
+      return;
+    }
+
     const payload = { url, events, active: true };
     if (reference) payload.reference = reference;
 
-    const r = await api('/webhooks', { method: 'POST', body: JSON.stringify(payload) });
-    if (!r) return;
-    if (!r.ok) {
-      alert(await responseError(r, 'Could not create webhook.'));
-      return;
+    const btn = document.getElementById('create-webhook-btn');
+    ui.setButtonBusy(btn, true, 'Saving...');
+    try {
+      const r = await api('/webhooks', { method: 'POST', body: JSON.stringify(payload) });
+      if (!r) return;
+      if (!r.ok) {
+        setAlert('webhook-msg', await ui.parseApiError(r, 'Could not create webhook.'), 'error');
+        return;
+      }
+
+      hideWebhookForm();
+      setAlert('webhook-msg', 'Webhook created.', 'success');
+      await loadWebhooks();
+    } finally {
+      ui.setButtonBusy(btn, false);
     }
-    hideWebhookForm();
-    loadWebhooks();
   }
 
-  async function deleteWebhook(id) {
-    if (!confirm('Delete this webhook?')) return;
-    await api('/webhooks/' + id, { method: 'DELETE' });
-    loadWebhooks();
-  }
-
-  async function requestCredits() {
-    if (ROLE === 'admin') return;
-    const amountStr = prompt('How many credits are you requesting?');
-    if (amountStr === null) return;
-    const amount = parseInt(amountStr, 10);
-    if (!amount || amount <= 0) { alert('Please enter a positive number of credits.'); return; }
-    const msg = prompt('Optional message (why do you need credits)?');
-    if (msg === null) return;
-    const r = await api('/credits/request', {
-      method: 'POST',
-      body: JSON.stringify({ user_id: USER_ID, amount: amount, message: msg || null })
+  async function deleteWebhook(id, button) {
+    const confirmed = await ui.confirmAction({
+      title: 'Delete webhook',
+      message: 'Delete this webhook subscription?',
+      confirmText: 'Delete',
+      danger: true,
     });
-    if (r && r.ok) alert('Request sent!');
+    if (!confirmed) return;
+
+    ui.setButtonBusy(button, true, 'Deleting...');
+    try {
+      const r = await api('/webhooks/' + id, { method: 'DELETE' });
+      if (!r) return;
+      if (!r.ok && r.status !== 204) {
+        setAlert('webhook-msg', await ui.parseApiError(r, 'Could not delete webhook.'), 'error');
+        return;
+      }
+
+      setAlert('webhook-msg', 'Webhook deleted.', 'success');
+      await loadWebhooks();
+    } finally {
+      ui.setButtonBusy(button, false);
+    }
   }
 
   loadBalance();

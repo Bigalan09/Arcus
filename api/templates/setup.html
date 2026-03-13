@@ -1,23 +1,22 @@
 {% extends "base.html" %}
 {% block title %}Setup – Arcus{% endblock %}
 {% block content %}
-<div class="max-w-sm mx-auto">
+<div class="max-w-sm mx-auto app-card p-6">
   <h1 class="text-2xl font-semibold mb-1">Welcome to Arcus</h1>
-  <p class="text-gray-400 mb-8 text-sm">Create your admin account to get started.</p>
+  <p class="text-gray-400 mb-6 text-sm">Create your admin account to get started.</p>
   <form id="setup-form" class="space-y-4">
     <div>
-      <label class="block text-sm text-gray-300 mb-1">Email</label>
+      <label class="app-label">Email</label>
       <input name="email" type="email" required autocomplete="email"
-        class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
+        class="app-input">
     </div>
     <div>
-      <label class="block text-sm text-gray-300 mb-1">Password</label>
+      <label class="app-label">Password</label>
       <input name="password" type="password" required autocomplete="new-password" minlength="8"
-        class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
+        class="app-input">
     </div>
-    <p id="err" class="text-red-400 text-sm hidden"></p>
-    <button type="submit"
-      class="w-full bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-4 py-2 text-sm font-medium transition">
+    <p id="err" class="hidden app-alert app-alert-error"></p>
+    <button id="setup-submit" type="submit" class="w-full app-btn app-btn-primary">
       Create admin account
     </button>
   </form>
@@ -27,19 +26,28 @@
 <script>
   document.getElementById('setup-form').addEventListener('submit', async e => {
     e.preventDefault();
+    const submit = document.getElementById('setup-submit');
+    const err = document.getElementById('err');
+    err.classList.add('hidden');
+    ui.setButtonBusy(submit, true, 'Creating account...');
     const data = Object.fromEntries(new FormData(e.target));
-    const res = await fetch('/auth/setup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
-    if (res.ok) {
-      window.location.href = '/login?setup=1';
-    } else {
-      const j = await res.json();
-      const err = document.getElementById('err');
-      err.textContent = j.detail || 'Setup failed.';
+    try {
+      const res = await fetch('/auth/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (res.ok) {
+        window.location.href = '/login?setup=1';
+      } else {
+        err.textContent = await ui.parseApiError(res, 'Setup failed.');
+        err.classList.remove('hidden');
+      }
+    } catch (_) {
+      err.textContent = 'Setup failed.';
       err.classList.remove('hidden');
+    } finally {
+      ui.setButtonBusy(submit, false);
     }
   });
 </script>

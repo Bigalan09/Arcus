@@ -5,31 +5,354 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}Arcus{% endblock %}</title>
   <link rel="stylesheet" href="/static/tailwind.css">
+  <style>
+    :root {
+      --surface-0: #050b1d;
+      --surface-1: #0b1328;
+      --surface-2: #1d283d;
+      --border: #26334f;
+      --text-muted: #95a3bd;
+      --brand: #5a54f3;
+      --brand-hover: #6d68f8;
+      --danger: #ef5d5d;
+      --danger-bg: rgba(239, 93, 93, 0.1);
+      --success: #35d087;
+      --success-bg: rgba(53, 208, 135, 0.1);
+      --warning: #f0c956;
+      --warning-bg: rgba(240, 201, 86, 0.12);
+    }
+    .app-shell {
+      background:
+        radial-gradient(1200px 600px at 0% -10%, rgba(90, 84, 243, 0.16), transparent 60%),
+        linear-gradient(180deg, #040915 0%, var(--surface-0) 45%, #040915 100%);
+    }
+    .app-nav {
+      backdrop-filter: blur(10px);
+      background: rgba(5, 11, 29, 0.86);
+    }
+    .app-card {
+      border: 1px solid var(--border);
+      border-radius: 0.9rem;
+      background: var(--surface-1);
+    }
+    .app-card-muted {
+      border: 1px solid var(--border);
+      border-radius: 0.7rem;
+      background: var(--surface-2);
+    }
+    .app-label {
+      display: block;
+      margin-bottom: 0.35rem;
+      color: #c3cee2;
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+    .app-input,
+    .app-select,
+    .app-textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 0.65rem;
+      background: #121c31;
+      color: #f4f7ff;
+      font-size: 0.92rem;
+      line-height: 1.35;
+      transition: border-color 120ms ease, box-shadow 120ms ease;
+    }
+    .app-input,
+    .app-select {
+      padding: 0.58rem 0.78rem;
+    }
+    .app-textarea {
+      min-height: 88px;
+      padding: 0.65rem 0.78rem;
+      resize: vertical;
+    }
+    .app-input::placeholder,
+    .app-textarea::placeholder {
+      color: #7f8ba4;
+    }
+    .app-input:focus,
+    .app-select:focus,
+    .app-textarea:focus {
+      outline: none;
+      border-color: var(--brand);
+      box-shadow: 0 0 0 1px rgba(90, 84, 243, 0.35);
+    }
+    .app-input:disabled,
+    .app-select:disabled,
+    .app-textarea:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+    .app-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      border-radius: 0.68rem;
+      border: 1px solid transparent;
+      font-size: 0.9rem;
+      font-weight: 600;
+      line-height: 1;
+      padding: 0.65rem 0.95rem;
+      transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, opacity 120ms ease;
+    }
+    .app-btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+    .app-btn-primary {
+      color: #fff;
+      background: var(--brand);
+      border-color: var(--brand);
+    }
+    .app-btn-primary:hover {
+      background: var(--brand-hover);
+      border-color: var(--brand-hover);
+    }
+    .app-btn-secondary {
+      color: #dbe4f5;
+      background: #1b2740;
+      border-color: #2c3a58;
+    }
+    .app-btn-secondary:hover {
+      background: #23314d;
+    }
+    .app-btn-subtle {
+      color: #dbe4f5;
+      background: transparent;
+      border-color: #354362;
+    }
+    .app-btn-subtle:hover {
+      background: rgba(53, 67, 98, 0.2);
+    }
+    .app-btn-danger {
+      color: #ffd8d8;
+      background: #7d1f2a;
+      border-color: #953447;
+    }
+    .app-btn-danger:hover {
+      background: #913040;
+    }
+    .app-btn-warning {
+      color: #ffe9b7;
+      background: #6e5520;
+      border-color: #84662b;
+    }
+    .app-btn-warning:hover {
+      background: #7a5f24;
+    }
+    .app-btn-link {
+      border: none;
+      background: transparent;
+      color: #9aa9ff;
+      padding: 0;
+      border-radius: 0;
+      font-weight: 600;
+    }
+    .app-btn-link:hover {
+      color: #b5c0ff;
+    }
+    .app-alert {
+      border-radius: 0.7rem;
+      border: 1px solid transparent;
+      padding: 0.6rem 0.8rem;
+      font-size: 0.9rem;
+      line-height: 1.4;
+    }
+    .app-alert-info {
+      background: rgba(90, 84, 243, 0.12);
+      color: #c2beff;
+      border-color: rgba(90, 84, 243, 0.35);
+    }
+    .app-alert-success {
+      background: var(--success-bg);
+      color: #85e7bb;
+      border-color: rgba(53, 208, 135, 0.32);
+    }
+    .app-alert-error {
+      background: var(--danger-bg);
+      color: #ffb5b5;
+      border-color: rgba(239, 93, 93, 0.38);
+    }
+    .app-alert-warning {
+      background: var(--warning-bg);
+      color: #f6daa0;
+      border-color: rgba(240, 201, 86, 0.3);
+    }
+    .app-help {
+      color: var(--text-muted);
+      font-size: 0.8rem;
+    }
+    .app-empty {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+    .app-pill {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      padding: 0.2rem 0.56rem;
+      font-size: 0.74rem;
+      font-weight: 600;
+      text-transform: lowercase;
+      letter-spacing: 0.01em;
+    }
+    .app-toast {
+      border: 1px solid var(--border);
+      border-left-width: 4px;
+      border-radius: 0.7rem;
+      background: #111a30;
+      color: #eff4ff;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.26);
+      padding: 0.6rem 0.78rem;
+      font-size: 0.87rem;
+      max-width: 24rem;
+    }
+    .app-toast-success { border-left-color: var(--success); }
+    .app-toast-error { border-left-color: var(--danger); }
+    .app-toast-info { border-left-color: var(--brand); }
+    .app-link {
+      color: #9aa9ff;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .app-link:hover {
+      color: #b5c0ff;
+    }
+  </style>
 </head>
-<body class="bg-gray-950 text-gray-100 min-h-screen">
-    <nav class="border-b border-gray-800 px-4 py-3 flex items-center justify-between">
-    <a href="/" class="text-lg font-bold text-indigo-400 tracking-tight">Arcus</a>
+<body class="app-shell text-gray-100 min-h-screen">
+  <nav class="app-nav sticky top-0 z-30 border-b border-gray-800/80">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+    <a href="/" class="text-lg font-bold text-indigo-300 tracking-tight">Arcus</a>
     {% if user %}
-    <div class="flex items-center gap-4">
-      <a href="/docs" target="_blank" class="text-sm text-gray-400 hover:text-white">API Docs</a>
+    <div class="flex items-center gap-4 flex-wrap justify-end">
+      <a href="/docs" target="_blank" class="text-sm text-gray-400 hover:text-white transition-colors">API docs</a>
       <span class="text-sm text-gray-400">{{ user.email }}</span>
       {% if user.role == 'admin' %}
-      <a href="/admin" class="text-sm text-gray-300 hover:text-white">Admin</a>
+      <a href="/admin" class="text-sm text-gray-300 hover:text-white transition-colors">Admin</a>
       {% endif %}
-      <button onclick="logout()" class="text-sm text-gray-400 hover:text-white">Sign out</button>
+      <button onclick="logout()" class="text-sm text-gray-400 hover:text-white transition-colors">Sign out</button>
     </div>
     {% endif %}
+    </div>
   </nav>
   <main class="{{ main_class or 'max-w-2xl' }} mx-auto px-4 py-10">
     {% if flash %}
-    <div id="flash" class="mb-6 rounded-lg px-4 py-3 text-sm
-      {% if flash_type == 'error' %}bg-red-900/60 text-red-300{% else %}bg-green-900/60 text-green-300{% endif %}">
+    <div id="flash" class="mb-6 app-alert {% if flash_type == 'error' %}app-alert-error{% else %}app-alert-success{% endif %}">
       {{ flash }}
     </div>
     {% endif %}
     {% block content %}{% endblock %}
   </main>
+  <div id="toast-root" class="fixed right-4 bottom-4 z-50 space-y-2" aria-live="polite" aria-atomic="true"></div>
+  <div id="confirm-modal" class="hidden fixed inset-0 z-50">
+    <div class="absolute inset-0 bg-black/60" data-close-confirm></div>
+    <div class="relative min-h-full flex items-center justify-center p-4">
+      <div class="w-full max-w-md app-card p-5">
+        <h2 id="confirm-title" class="text-lg font-semibold text-gray-100"></h2>
+        <p id="confirm-message" class="text-sm text-gray-300 mt-2 leading-relaxed"></p>
+        <div class="mt-5 flex justify-end gap-2">
+          <button id="confirm-cancel" type="button" class="app-btn app-btn-secondary">Cancel</button>
+          <button id="confirm-accept" type="button" class="app-btn app-btn-danger">Confirm</button>
+        </div>
+      </div>
+    </div>
+  </div>
   <script>
+    const ui = (() => {
+      const toastRoot = document.getElementById('toast-root');
+      const confirmModal = document.getElementById('confirm-modal');
+      const confirmTitle = document.getElementById('confirm-title');
+      const confirmMessage = document.getElementById('confirm-message');
+      const confirmCancel = document.getElementById('confirm-cancel');
+      const confirmAccept = document.getElementById('confirm-accept');
+      let confirmResolve = null;
+
+      function toast(message, type = 'info', timeout = 4200) {
+        if (!toastRoot || !message) return;
+        const el = document.createElement('div');
+        el.className = `app-toast app-toast-${type === 'error' ? 'error' : type === 'success' ? 'success' : 'info'}`;
+        el.textContent = message;
+        toastRoot.appendChild(el);
+        window.setTimeout(() => {
+          el.remove();
+        }, timeout);
+      }
+
+      function setButtonBusy(button, busy, label = 'Working...') {
+        if (!button) return;
+        if (busy) {
+          button.dataset.originalText = button.textContent;
+          button.disabled = true;
+          button.textContent = label;
+          return;
+        }
+        button.disabled = false;
+        if (button.dataset.originalText) {
+          button.textContent = button.dataset.originalText;
+          delete button.dataset.originalText;
+        }
+      }
+
+      async function parseApiError(response, fallback = 'Request failed.') {
+        try {
+          const body = await response.json();
+          if (typeof body.detail === 'string') return body.detail;
+          if (Array.isArray(body.detail) && body.detail.length && body.detail[0].msg) return body.detail[0].msg;
+          return fallback;
+        } catch (_) {
+          return fallback;
+        }
+      }
+
+      function closeConfirm(result) {
+        confirmModal.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+        if (confirmResolve) confirmResolve(result);
+        confirmResolve = null;
+      }
+
+      function confirmAction({
+        title = 'Confirm action',
+        message = 'Are you sure?',
+        confirmText = 'Confirm',
+        danger = false,
+      } = {}) {
+        if (!confirmModal) return Promise.resolve(false);
+        confirmTitle.textContent = title;
+        confirmMessage.textContent = message;
+        confirmAccept.textContent = confirmText;
+        confirmAccept.classList.remove('app-btn-danger', 'app-btn-primary');
+        confirmAccept.classList.add(danger ? 'app-btn-danger' : 'app-btn-primary');
+        confirmModal.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+        return new Promise(resolve => {
+          confirmResolve = resolve;
+        });
+      }
+
+      confirmCancel.addEventListener('click', () => closeConfirm(false));
+      confirmAccept.addEventListener('click', () => closeConfirm(true));
+      confirmModal.querySelector('[data-close-confirm]').addEventListener('click', () => closeConfirm(false));
+      document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && !confirmModal.classList.contains('hidden')) {
+          closeConfirm(false);
+        }
+      });
+
+      return {
+        toast,
+        setButtonBusy,
+        parseApiError,
+        confirmAction,
+      };
+    })();
+    window.ui = ui;
+
     async function logout() {
       await fetch('/auth/logout', { method: 'POST' });
       window.location.href = '/login';
