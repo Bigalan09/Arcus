@@ -33,14 +33,18 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["webhooks"])
 
 # Events that only admins may subscribe to on user-owned webhooks
-ADMIN_ONLY_EVENTS: frozenset[str] = frozenset({"credit.request"})
+ADMIN_ONLY_EVENTS: frozenset[str] = frozenset({"credits.requested", "user.created"})
 
 WEBHOOK_EVENTS: tuple[WebhookEventOption, ...] = (
-    WebhookEventOption(key="credit.request", label="Credit Request", admin_only=True),
-    WebhookEventOption(key="user.created", label="User Created", admin_only=False),
-    WebhookEventOption(key="subdomain.purchased", label="Subdomain Purchased", admin_only=False),
+    WebhookEventOption(key="credits.requested", label="Credits Requested", admin_only=True),
+    WebhookEventOption(key="user.created", label="User Created", admin_only=True),
+    WebhookEventOption(key="subdomain.created", label="Subdomain Created", admin_only=False),
+    WebhookEventOption(key="subdomain.updated", label="Subdomain Updated", admin_only=False),
     WebhookEventOption(key="subdomain.deleted", label="Subdomain Deleted", admin_only=False),
-    WebhookEventOption(key="subdomain.origin.updated", label="Subdomain Origin Updated", admin_only=False),
+    WebhookEventOption(key="credits.granted", label="Credits Granted", admin_only=False),
+    WebhookEventOption(key="token.created", label="Token Created", admin_only=False),
+    WebhookEventOption(key="token.revoked", label="Token Revoked", admin_only=False),
+    WebhookEventOption(key="token.expired", label="Token Expired", admin_only=False),
 )
 WEBHOOK_EVENT_KEYS: frozenset[str] = frozenset(ev.key for ev in WEBHOOK_EVENTS)
 

@@ -82,7 +82,7 @@ async def purchase_subdomain(
     webhooks = result.scalars().all()
     await fire_webhooks(
         webhooks,
-        "subdomain.purchased",
+        "subdomain.created",
         {
             "subdomain_id": str(subdomain.id),
             "user_id": str(subdomain.user_id),
@@ -128,7 +128,7 @@ async def set_origin(
     webhooks = result.scalars().all()
     await fire_webhooks(
         webhooks,
-        "subdomain.origin.updated",
+        "subdomain.updated",
         {
             "subdomain_id": str(subdomain.id),
             "user_id": str(subdomain.user_id),

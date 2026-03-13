@@ -7,7 +7,7 @@ import pytest
 
 SAMPLE_WEBHOOK = {
     "url": "https://example.com/webhook",
-    "events": ["credit.request"],
+    "events": ["credits.requested"],
     "active": True,
 }
 
@@ -47,8 +47,8 @@ async def test_list_webhook_events_for_admin(client, admin_headers):
     resp = await client.get("/admin/webhooks/events", headers=admin_headers)
     assert resp.status_code == 200
     keys = [e["key"] for e in resp.json()]
-    assert "credit.request" in keys
-    assert "subdomain.purchased" in keys
+    assert "credits.requested" in keys
+    assert "subdomain.created" in keys
 
 
 # ---------------------------------------------------------------------------
@@ -62,7 +62,7 @@ async def test_create_webhook_success(client, admin_headers):
     assert resp.status_code == 201
     data = resp.json()
     assert data["url"] == "https://example.com/webhook"
-    assert "credit.request" in data["events"]
+    assert "credits.requested" in data["events"]
     assert data["active"] is True
     assert "id" in data
     assert "created_at" in data
@@ -80,11 +80,11 @@ async def test_create_webhook_with_secret(client, admin_headers):
 @pytest.mark.asyncio
 async def test_create_webhook_multiple_events(client, admin_headers):
     """POST /admin/webhooks with multiple events stores them all."""
-    payload = {**SAMPLE_WEBHOOK, "events": ["credit.request", "user.created"]}
+    payload = {**SAMPLE_WEBHOOK, "events": ["credits.requested", "user.created"]}
     resp = await client.post("/admin/webhooks", json=payload, headers=admin_headers)
     assert resp.status_code == 201
     events = resp.json()["events"]
-    assert "credit.request" in events
+    assert "credits.requested" in events
     assert "user.created" in events
 
 
@@ -246,22 +246,33 @@ async def test_list_webhooks_shows_all(client, admin_headers):
 
 
 # ---------------------------------------------------------------------------
-# User webhooks – credit.request admin-only restriction
+# User webhooks – credits.requested / user.created admin-only restriction
 # ---------------------------------------------------------------------------
 
 PRO_WEBHOOK = {
     "url": "https://pro.example.com/hook",
-    "events": ["user.created"],
+    "events": ["subdomain.created"],
     "active": True,
 }
 
 
 @pytest.mark.asyncio
 async def test_pro_user_cannot_subscribe_credit_request(client, pro_user):
-    """POST /webhooks with credit.request event returns 403 for pro user."""
+    """POST /webhooks with credits.requested event returns 403 for pro user."""
     resp = await client.post(
         "/webhooks",
-        json={**PRO_WEBHOOK, "events": ["credit.request"]},
+        json={**PRO_WEBHOOK, "events": ["credits.requested"]},
+        headers=pro_user["headers"],
+    )
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_pro_user_cannot_subscribe_user_created(client, pro_user):
+    """POST /webhooks with user.created event returns 403 for pro user."""
+    resp = await client.post(
+        "/webhooks",
+        json={**PRO_WEBHOOK, "events": ["user.created"]},
         headers=pro_user["headers"],
     )
     assert resp.status_code == 403
@@ -269,10 +280,10 @@ async def test_pro_user_cannot_subscribe_credit_request(client, pro_user):
 
 @pytest.mark.asyncio
 async def test_pro_user_cannot_include_credit_request_among_events(client, pro_user):
-    """POST /webhooks with credit.request mixed in with other events returns 403 for pro user."""
+    """POST /webhooks with credits.requested mixed in with other events returns 403 for pro user."""
     resp = await client.post(
         "/webhooks",
-        json={**PRO_WEBHOOK, "events": ["user.created", "credit.request"]},
+        json={**PRO_WEBHOOK, "events": ["subdomain.created", "credits.requested"]},
         headers=pro_user["headers"],
     )
     assert resp.status_code == 403
@@ -287,7 +298,7 @@ async def test_pro_user_can_subscribe_to_other_events(client, pro_user):
         headers=pro_user["headers"],
     )
     assert resp.status_code == 201
-    assert resp.json()["events"] == ["user.created"]
+    assert resp.json()["events"] == ["subdomain.created"]
 
 
 @pytest.mark.asyncio
@@ -305,7 +316,7 @@ async def test_webhook_reference_header_is_sent(client, admin_headers, normal_us
         "/admin/webhooks",
         json={
             "url": "https://receiver.example.com/hook",
-            "events": ["credit.request"],
+            "events": ["credits.requested"],
             "active": True,
             "reference": "credit-alerts",
         },
@@ -345,28 +356,28 @@ async def test_webhook_reference_header_is_sent(client, admin_headers, normal_us
 
 @pytest.mark.asyncio
 async def test_admin_can_create_credit_request_user_webhook(client, admin_headers):
-    """POST /webhooks with credit.request succeeds for admin user."""
+    """POST /webhooks with credits.requested succeeds for admin user."""
     resp = await client.post(
         "/webhooks",
-        json={**PRO_WEBHOOK, "events": ["credit.request"]},
+        json={**PRO_WEBHOOK, "events": ["credits.requested"]},
         headers=admin_headers,
     )
     assert resp.status_code == 201
-    assert "credit.request" in resp.json()["events"]
+    assert "credits.requested" in resp.json()["events"]
 
 
 @pytest.mark.asyncio
 async def test_pro_user_cannot_update_webhook_to_credit_request(client, pro_user):
-    """PUT /webhooks/{id} updating events to credit.request returns 403 for pro user."""
+    """PUT /webhooks/{id} updating events to credits.requested returns 403 for pro user."""
     # First create a valid webhook
     create_resp = await client.post("/webhooks", json=PRO_WEBHOOK, headers=pro_user["headers"])
     assert create_resp.status_code == 201
     webhook_id = create_resp.json()["id"]
 
-    # Attempt to update events to include credit.request
+    # Attempt to update events to include credits.requested
     resp = await client.put(
         f"/webhooks/{webhook_id}",
-        json={"events": ["credit.request"]},
+        json={"events": ["credits.requested"]},
         headers=pro_user["headers"],
     )
     assert resp.status_code == 403
