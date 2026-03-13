@@ -185,7 +185,8 @@
 
   let slugCheckTimer = null;
   let lastSlugCheckAt = 0;
-  let lastSlugChecked = '';
+  let lastSlugCheckKey = '';
+  let lastSlugCheckResult = null;
 
   function escapeHtml(value) {
     return String(value)
@@ -398,7 +399,15 @@
     document.getElementById('subdomain-origin-port').value = '';
     document.getElementById('slug-availability').classList.add('hidden');
     if (slugCheckTimer) clearTimeout(slugCheckTimer);
+    lastSlugCheckAt = 0;
+    lastSlugCheckKey = '';
+    lastSlugCheckResult = null;
   }
+
+  function formatSubdomainName(slug, domain) {
+    return domain ? `${slug}.${domain}` : slug;
+  }
+
   function updateSlugAvailability(state, text) {
     const panel = document.getElementById('slug-availability');
     const icon = document.getElementById('slug-availability-icon');
@@ -425,15 +434,18 @@
 
   async function checkSlugAvailability(slug, force = false) {
     if (!SLUG_RE.test(slug)) {
-      updateSlugAvailability('unavailable', 'Invalid slug format.');
-      return { ok: false, available: false, detail: 'Invalid slug format.' };
+      const result = { ok: false, available: false, detail: 'Use 3-32 lowercase letters or numbers only.' };
+      updateSlugAvailability('unavailable', result.detail);
+      return result;
     }
 
     const selectedDomain = document.getElementById('subdomain-domain')?.value || '';
+    const cacheKey = `${slug}::${selectedDomain}`;
 
     const now = Date.now();
-    if (!force && slug === lastSlugChecked && now - lastSlugCheckAt < SLUG_CHECK_MIN_INTERVAL_MS) {
-      return { ok: true, available: true, skipped: true };
+    if (!force && cacheKey === lastSlugCheckKey && lastSlugCheckResult && now - lastSlugCheckAt < SLUG_CHECK_MIN_INTERVAL_MS) {
+      updateSlugAvailability(lastSlugCheckResult.available ? 'available' : 'unavailable', lastSlugCheckResult.detail);
+      return { ...lastSlugCheckResult, skipped: true };
     }
 
     const waitMs = Math.max(0, SLUG_CHECK_MIN_INTERVAL_MS - (now - lastSlugCheckAt));
@@ -441,7 +453,7 @@
       await new Promise(resolve => setTimeout(resolve, waitMs));
     }
 
-    updateSlugAvailability('loading', `Checking '${slug}.${selectedDomain}'...`);
+    updateSlugAvailability('loading', `Checking '${formatSubdomainName(slug, selectedDomain)}'...`);
     const params = new URLSearchParams({ slug });
     if (selectedDomain) params.set('domain', selectedDomain);
     const r = await fetch(`/subdomains/check?${params}`);
@@ -451,16 +463,24 @@
     }
 
     const j = await r.json();
-    lastSlugChecked = slug;
+    const detail = j.detail || (
+      j.available
+        ? `'${formatSubdomainName(slug, j.domain)}' is available.`
+        : `'${formatSubdomainName(slug, j.domain)}' is not available.`
+    );
+    const result = {
+      ok: true,
+      available: j.available,
+      detail,
+      reason: j.reason || null,
+      domain: j.domain,
+    };
+    lastSlugCheckKey = cacheKey;
     lastSlugCheckAt = Date.now();
+    lastSlugCheckResult = result;
 
-    if (j.available) {
-      updateSlugAvailability('available', `'${slug}.${j.domain}' is available.`);
-      return { ok: true, available: true };
-    }
-
-    updateSlugAvailability('unavailable', `'${slug}.${j.domain}' is taken.`);
-    return { ok: true, available: false, detail: 'Slug is already taken.' };
+    updateSlugAvailability(j.available ? 'available' : 'unavailable', detail);
+    return result;
   }
 
   function onSubdomainSlugInput() {

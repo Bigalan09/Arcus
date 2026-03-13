@@ -132,15 +132,8 @@ RESERVED_SLUGS = {"www", "api", "admin", "mail", "cdn", "app"}
 
 class SubdomainPurchase(BaseModel):
     user_id: uuid.UUID
-    slug: str = Field(pattern=SLUG_PATTERN)
+    slug: str = Field(min_length=1, max_length=64)
     domain: str | None = Field(default=None, description="Target domain (defaults to the primary configured domain)")
-
-    @field_validator("slug")
-    @classmethod
-    def slug_not_reserved(cls, v: str) -> str:
-        if v in RESERVED_SLUGS:
-            raise ValueError(f"'{v}' is a reserved subdomain and cannot be purchased")
-        return v
 
 
 class OriginSet(BaseModel):
@@ -165,6 +158,8 @@ class SubdomainCheckResponse(BaseModel):
     slug: str
     domain: str
     available: bool
+    reason: Literal["invalid_domain", "invalid_format", "reserved", "profanity", "blocklisted", "taken"] | None = None
+    detail: str | None = None
 
 
 # ---------------------------------------------------------------------------

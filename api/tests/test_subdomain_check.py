@@ -19,6 +19,7 @@ async def test_check_slug_available(client):
     data = resp.json()
     assert data["slug"] == "freeone"
     assert data["available"] is True
+    assert data["reason"] is None
     assert "domain" in data  # domain field present in response
 
 
@@ -33,6 +34,8 @@ async def test_check_slug_taken(client, admin_headers):
     data = resp.json()
     assert data["slug"] == "takenslug"
     assert data["available"] is False
+    assert data["reason"] == "taken"
+    assert "taken" in data["detail"].lower()
 
 
 @pytest.mark.asyncio
@@ -47,3 +50,23 @@ async def test_check_slug_after_purchase(client, admin_headers):
 
     after = await client.get("/subdomains/check?slug=newslug")
     assert after.json()["available"] is False
+
+
+@pytest.mark.asyncio
+async def test_check_slug_reserved_reports_unavailable(client):
+    """Reserved slugs should be rejected by the public availability check too."""
+    resp = await client.get("/subdomains/check?slug=www")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["available"] is False
+    assert data["reason"] == "reserved"
+
+
+@pytest.mark.asyncio
+async def test_check_slug_invalid_domain_reports_unavailable(client):
+    """Unconfigured domains should be rejected without pretending the slug is available."""
+    resp = await client.get("/subdomains/check?slug=freeone&domain=notconfigured.example.com")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["available"] is False
+    assert data["reason"] == "invalid_domain"

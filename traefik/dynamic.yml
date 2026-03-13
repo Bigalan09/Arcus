@@ -1,29 +1,5 @@
 # Traefik dynamic configuration
 http:
-  routers:
-    # Wildcard router – catches all *.bigalan.dev requests and sends them
-    # to the Arcus router service.
-    arcus-wildcard:
-      rule: "HostRegexp(`{subdomain:[a-z0-9]{3,32}}.bigalan.dev`)"
-      entryPoints:
-        - websecure
-      service: arcus-router
-      tls:
-        certResolver: letsencrypt
-        domains:
-          - main: "bigalan.dev"
-            sans:
-              - "*.bigalan.dev"
-      middlewares:
-        - rate-limit
-
-  services:
-    arcus-router:
-      loadBalancer:
-        servers:
-          - url: "http://router:8001"
-        passHostHeader: true
-
   middlewares:
     rate-limit:
       rateLimit:

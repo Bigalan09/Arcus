@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     # Single-domain fallback (kept for backward compatibility)
     cloudflare_zone_id: str = ""
     base_domain: str = "bigalan.dev"
+    allow_private_origin_hosts: bool = False
 
     api_secret_key: str = "changeme"
 
