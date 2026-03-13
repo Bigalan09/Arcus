@@ -178,7 +178,7 @@ async def test_admin_full_journey(client):
     # --- system webhook: create, list, update, delete ---
     r = await client.post(
         "/admin/webhooks",
-        json={"url": "https://hooks.example.com/sys", "events": ["credit.request"], "active": True},
+        json={"url": "https://hooks.example.com/sys", "events": ["credits.requested"], "active": True},
         headers=admin_headers,
     )
     assert r.status_code == 201
@@ -378,7 +378,7 @@ async def test_pro_user_full_journey(client):
     # --- user webhooks: create ---
     r = await client.post(
         "/webhooks",
-        json={"url": "https://myhook.example.com/events", "events": ["user.created"], "active": True},
+        json={"url": "https://myhook.example.com/events", "events": ["subdomain.created"], "active": True},
         headers=ph,
     )
     assert r.status_code == 201
@@ -429,7 +429,7 @@ async def test_pro_user_webhook_secret(client):
         json={
             "url": "https://signed.example.com/hook",
             "secret": "mysupersecretsigning",
-            "events": ["user.created"],
+            "events": ["subdomain.created"],
             "active": True,
         },
         headers=pro["headers"],
@@ -465,7 +465,7 @@ async def test_normal_user_cannot_access_user_webhooks(client):
 
     assert (await client.get("/webhooks", headers=nh)).status_code == 403
     assert (
-        await client.post("/webhooks", json={"url": "https://x.com", "events": ["credit.request"]}, headers=nh)
+        await client.post("/webhooks", json={"url": "https://x.com", "events": ["credits.requested"]}, headers=nh)
     ).status_code == 403
     assert (await client.put(f"/webhooks/{uuid.uuid4()}", json={}, headers=nh)).status_code == 403
     assert (await client.delete(f"/webhooks/{uuid.uuid4()}", headers=nh)).status_code == 403
@@ -519,14 +519,14 @@ def _make_mock_webhook_client(
 
 @pytest.mark.asyncio
 async def test_system_webhook_fires_on_credit_request(client):
-    """A system webhook subscribed to credit.request fires when a user requests credits."""
+    """A system webhook subscribed to credits.requested fires when a user requests credits."""
     admin_headers = await _setup_admin(client)
     normal = await _create_user_with_password(client, admin_headers, NORMAL_EMAIL, "normal")
 
     # Register system webhook
     await client.post(
         "/admin/webhooks",
-        json={"url": "https://receiver.example.com/hook", "events": ["credit.request"], "active": True},
+        json={"url": "https://receiver.example.com/hook", "events": ["credits.requested"], "active": True},
         headers=admin_headers,
     )
 
@@ -547,14 +547,14 @@ async def test_system_webhook_fires_on_credit_request(client):
 
 @pytest.mark.asyncio
 async def test_user_webhook_fires_on_credit_request(client):
-    """A user webhook (admin-owned) fires together with any system webhook on credit.request."""
+    """A user webhook (admin-owned) fires together with any system webhook on credits.requested."""
     admin_headers = await _setup_admin(client)
     pro = await _create_user_with_password(client, admin_headers, PRO_EMAIL, "pro")
 
-    # Admin creates a user-scoped webhook with credit.request (only admins can do this)
+    # Admin creates a user-scoped webhook with credits.requested (only admins can do this)
     await client.post(
         "/webhooks",
-        json={"url": "https://pro-hook.example.com/events", "events": ["credit.request"], "active": True},
+        json={"url": "https://pro-hook.example.com/events", "events": ["credits.requested"], "active": True},
         headers=admin_headers,
     )
 
@@ -584,7 +584,7 @@ async def test_webhook_hmac_signature(client):
         json={
             "url": "https://signed.example.com/hook",
             "secret": secret,
-            "events": ["credit.request"],
+            "events": ["credits.requested"],
             "active": True,
         },
         headers=admin_headers,
@@ -618,7 +618,7 @@ async def test_inactive_webhook_not_fired(client):
 
     await client.post(
         "/admin/webhooks",
-        json={"url": "https://inactive.example.com/hook", "events": ["credit.request"], "active": False},
+        json={"url": "https://inactive.example.com/hook", "events": ["credits.requested"], "active": False},
         headers=admin_headers,
     )
 
@@ -638,7 +638,7 @@ async def test_inactive_webhook_not_fired(client):
 
 @pytest.mark.asyncio
 async def test_wrong_event_webhook_not_fired(client):
-    """A webhook subscribed to a different event is not fired for credit.request."""
+    """A webhook subscribed to a different event is not fired for credits.requested."""
     admin_headers = await _setup_admin(client)
     normal = await _create_user_with_password(client, admin_headers, NORMAL_EMAIL, "normal")
 
@@ -670,7 +670,7 @@ async def test_webhook_delivery_failure_does_not_block_response(client):
 
     await client.post(
         "/admin/webhooks",
-        json={"url": "https://broken.example.com/hook", "events": ["credit.request"], "active": True},
+        json={"url": "https://broken.example.com/hook", "events": ["credits.requested"], "active": True},
         headers=admin_headers,
     )
 
@@ -700,7 +700,7 @@ async def test_multiple_webhooks_all_fire(client):
             "/admin/webhooks",
             json={
                 "url": f"https://hook{i}.example.com/events",
-                "events": ["credit.request"],
+                "events": ["credits.requested"],
                 "active": True,
             },
             headers=admin_headers,
@@ -728,7 +728,7 @@ async def test_webhook_payload_structure(client):
 
     await client.post(
         "/admin/webhooks",
-        json={"url": "https://payload.example.com/hook", "events": ["credit.request"], "active": True},
+        json={"url": "https://payload.example.com/hook", "events": ["credits.requested"], "active": True},
         headers=admin_headers,
     )
 
@@ -745,7 +745,7 @@ async def test_webhook_payload_structure(client):
     assert len(calls) == 1
     _url, body_bytes, _headers = calls[0]
     payload = json.loads(body_bytes)
-    assert payload["event"] == "credit.request"
+    assert payload["event"] == "credits.requested"
     assert "fired_at" in payload
     assert payload["data"]["user_id"] == normal["id"]
     assert payload["data"]["amount"] == 10
@@ -1215,7 +1215,7 @@ async def test_user_webhooks_are_isolated(client):
     # pro1 creates a webhook
     r = await client.post(
         "/webhooks",
-        json={"url": "https://pro1.example.com/hook", "events": ["user.created"], "active": True},
+        json={"url": "https://pro1.example.com/hook", "events": ["subdomain.created"], "active": True},
         headers=pro1["headers"],
     )
     assert r.status_code == 201
@@ -1249,7 +1249,7 @@ async def test_admin_cannot_modify_user_webhook_via_admin_endpoint(client):
     # Pro creates user webhook
     r = await client.post(
         "/webhooks",
-        json={"url": "https://user.example.com/hook", "events": ["user.created"], "active": True},
+        json={"url": "https://user.example.com/hook", "events": ["subdomain.created"], "active": True},
         headers=pro["headers"],
     )
     wh_id = r.json()["id"]

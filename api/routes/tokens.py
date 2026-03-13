@@ -20,13 +20,40 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.database import get_db
-from api.models import ApiToken, User
+from api.models import ApiToken, User, Webhook
 from api.schemas import ApiTokenCreate, ApiTokenCreatedResponse, ApiTokenResponse
 from api.utils.auth import generate_api_token, hash_api_token
 from api.utils.deps import API_TOKEN_LIMITS, api_token_cutoff, get_current_user
+from api.utils.webhooks import fire_webhooks
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/tokens", tags=["tokens"])
+
+
+async def _collect_and_prune_expired(user_id, cutoff, db: AsyncSession) -> list:
+    """Return expired tokens for user and delete them from the database."""
+    expired_result = await db.execute(
+        select(ApiToken).where(ApiToken.user_id == user_id, ApiToken.created_at < cutoff)
+    )
+    expired_tokens = expired_result.scalars().all()
+    await db.execute(
+        delete(ApiToken).where(ApiToken.user_id == user_id, ApiToken.created_at < cutoff)
+    )
+    return expired_tokens
+
+
+async def _fire_token_expired_webhooks(expired_tokens: list, db: AsyncSession) -> None:
+    """Fire token.expired webhooks for each expired token."""
+    if not expired_tokens:
+        return
+    wh_result = await db.execute(select(Webhook).where(Webhook.active.is_(True)))
+    webhooks = wh_result.scalars().all()
+    for expired in expired_tokens:
+        await fire_webhooks(
+            webhooks,
+            "token.expired",
+            {"token_id": str(expired.id), "user_id": str(expired.user_id), "name": expired.name},
+        )
 
 
 @router.post("", response_model=ApiTokenCreatedResponse, status_code=status.HTTP_201_CREATED)
@@ -40,9 +67,8 @@ async def create_token(
     The raw token is returned exactly once; only a hash is stored.
     """
     cutoff = api_token_cutoff()
-    await db.execute(
-        delete(ApiToken).where(ApiToken.user_id == user.id, ApiToken.created_at < cutoff)
-    )
+
+    expired_tokens = await _collect_and_prune_expired(user.id, cutoff, db)
 
     limit = API_TOKEN_LIMITS.get(user.role)
     if limit is not None:
@@ -68,6 +94,21 @@ async def create_token(
 
     logger.info("API token '%s' created for user %s", payload.name, user.id)
 
+    # Fetch active webhooks once and use for both expired-token and new-token events
+    wh_result = await db.execute(select(Webhook).where(Webhook.active.is_(True)))
+    webhooks = wh_result.scalars().all()
+    for expired in expired_tokens:
+        await fire_webhooks(
+            webhooks,
+            "token.expired",
+            {"token_id": str(expired.id), "user_id": str(expired.user_id), "name": expired.name},
+        )
+    await fire_webhooks(
+        webhooks,
+        "token.created",
+        {"token_id": str(api_token.id), "user_id": str(api_token.user_id), "name": api_token.name},
+    )
+
     return ApiTokenCreatedResponse(
         id=api_token.id,
         name=api_token.name,
@@ -83,10 +124,10 @@ async def list_tokens(
 ):
     """List the current user's API tokens (raw values are never returned)."""
     cutoff = api_token_cutoff()
-    await db.execute(
-        delete(ApiToken).where(ApiToken.user_id == user.id, ApiToken.created_at < cutoff)
-    )
+
+    expired_tokens = await _collect_and_prune_expired(user.id, cutoff, db)
     await db.commit()
+    await _fire_token_expired_webhooks(expired_tokens, db)
 
     result = await db.execute(
         select(ApiToken)
@@ -117,6 +158,15 @@ async def revoke_token(
     if api_token is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Token not found.")
 
+    token_name = api_token.name
     await db.delete(api_token)
     await db.commit()
     logger.info("API token %s revoked by user %s", token_id, user.id)
+
+    wh_result = await db.execute(select(Webhook).where(Webhook.active.is_(True)))
+    webhooks = wh_result.scalars().all()
+    await fire_webhooks(
+        webhooks,
+        "token.revoked",
+        {"token_id": token_id, "user_id": str(user.id), "name": token_name},
+    )

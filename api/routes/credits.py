@@ -90,6 +90,14 @@ async def grant_credits(
     await db.commit()
     await db.refresh(credit)
     logger.info("Granted %d credit(s) to user %s (new balance: %d)", payload.amount, payload.user_id, credit.balance)
+
+    result = await db.execute(select(Webhook).where(Webhook.active.is_(True)))
+    webhooks = result.scalars().all()
+    await fire_webhooks(
+        webhooks,
+        "credits.granted",
+        {"user_id": str(payload.user_id), "amount": payload.amount, "new_balance": credit.balance},
+    )
     return credit
 
 
@@ -125,7 +133,7 @@ async def request_credits(
     webhooks = result.scalars().all()
 
     webhook_payload = {"user_id": str(payload.user_id), "amount": payload.amount, "message": payload.message}
-    fired = await fire_webhooks(webhooks, "credit.request", webhook_payload)
+    fired = await fire_webhooks(webhooks, "credits.requested", webhook_payload)
 
     logger.info("Credit request from user %s – %d webhook(s) fired", payload.user_id, fired)
     return CreditRequestResponse(user_id=payload.user_id, webhooks_fired=fired)
