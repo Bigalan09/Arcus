@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Arcus{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: { brand: '#6366f1' }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen">
+  <nav class="border-b border-gray-800 px-4 py-3 flex items-center justify-between">
+    <a href="/" class="text-lg font-bold text-indigo-400 tracking-tight">Arcus</a>
+    {% if user %}
+    <div class="flex items-center gap-4">
+      <span class="text-sm text-gray-400">{{ user.email }}</span>
+      {% if user.role == 'admin' %}
+      <a href="/admin" class="text-sm text-gray-300 hover:text-white">Admin</a>
+      {% endif %}
+      <button onclick="logout()" class="text-sm text-gray-400 hover:text-white">Sign out</button>
+    </div>
+    {% endif %}
+  </nav>
+  <main class="max-w-2xl mx-auto px-4 py-10">
+    {% if flash %}
+    <div id="flash" class="mb-6 rounded-lg px-4 py-3 text-sm
+      {% if flash_type == 'error' %}bg-red-900/60 text-red-300{% else %}bg-green-900/60 text-green-300{% endif %}">
+      {{ flash }}
+    </div>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+  <script>
+    async function logout() {
+      await fetch('/auth/logout', { method: 'POST' });
+      window.location.href = '/login';
+    }
+    setTimeout(() => {
+      const f = document.getElementById('flash');
+      if (f) f.remove();
+    }, 4000);
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -20,10 +20,14 @@ class User(Base):
         default="normal",
         server_default="normal",
     )
+    password_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
+    must_change_password: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
 
     credits: Mapped["Credit"] = relationship("Credit", back_populates="user", uselist=False, cascade="all, delete-orphan")
     subdomains: Mapped[list["Subdomain"]] = relationship("Subdomain", back_populates="user", cascade="all, delete-orphan")
+    api_tokens: Mapped[list["ApiToken"]] = relationship("ApiToken", back_populates="user", cascade="all, delete-orphan")
+    webhooks: Mapped[list["Webhook"]] = relationship("Webhook", back_populates="user", cascade="all, delete-orphan")
 
 
 class Credit(Base):
@@ -67,9 +71,27 @@ class Webhook(Base):
     __tablename__ = "webhooks"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
     url: Mapped[str] = mapped_column(Text, nullable=False)
     secret: Mapped[str | None] = mapped_column(Text, nullable=True)
     events: Mapped[str] = mapped_column(Text, nullable=False, default="credit.request", server_default="credit.request")
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
+
+    user: Mapped["User | None"] = relationship("User", back_populates="webhooks")
+
+
+class ApiToken(Base):
+    __tablename__ = "api_tokens"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    token_hash: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
+    last_used_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
+    user: Mapped["User"] = relationship("User", back_populates="api_tokens")
 

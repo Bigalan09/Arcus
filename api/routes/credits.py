@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.database import get_db
 from api.models import Credit, User, Webhook
 from api.schemas import CreditGrant, CreditRequest, CreditRequestResponse, CreditResponse
+from api.utils.deps import get_current_user, require_admin
 from api.utils.webhooks import fire_webhooks
 
 logger = logging.getLogger(__name__)
@@ -18,34 +19,45 @@ router = APIRouter(prefix="/credits", tags=["credits"])
 
 @router.get("", response_model=CreditResponse)
 async def get_credits(
-    user_id: uuid.UUID = Query(..., description="UUID of the user whose credit balance to retrieve"),
+    user_id: uuid.UUID | None = Query(None, description="Admin: query another user's balance"),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Return the current credit balance for a user."""
-    user = await db.get(User, user_id)
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    """Return the credit balance for the authenticated user.
 
-    result = await db.execute(select(Credit).where(Credit.user_id == user_id))
+    Admins may pass ``user_id`` to query any user's balance.
+    """
+    if user_id and user_id != user.id:
+        if user.role != "admin":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot query other users' credits.")
+        target = await db.get(User, user_id)
+        if target is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+        target_id = user_id
+    else:
+        target_id = user.id
+
+    result = await db.execute(select(Credit).where(Credit.user_id == target_id))
     credit = result.scalar_one_or_none()
     if credit is None:
-        # Edge case: user exists but no credit row (e.g. created outside the API).
-        # Auto-initialise to ensure consistency.
-        credit = Credit(user_id=user_id, balance=0)
+        credit = Credit(user_id=target_id, balance=0)
         db.add(credit)
         await db.commit()
         await db.refresh(credit)
-        logger.warning("Auto-initialised missing credit record for user %s", user_id)
+        logger.warning("Auto-initialised missing credit record for user %s", target_id)
 
     return credit
 
 
 @router.post("/grant", response_model=CreditResponse, status_code=status.HTTP_200_OK)
-async def grant_credits(payload: CreditGrant, db: AsyncSession = Depends(get_db)):
-    """Add credits to a user's balance."""
-    # Verify the user exists.
-    user = await db.get(User, payload.user_id)
-    if user is None:
+async def grant_credits(
+    payload: CreditGrant,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Add credits to a user's balance. Requires admin authentication."""
+    target_user = await db.get(User, payload.user_id)
+    if target_user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found.",
@@ -67,24 +79,26 @@ async def grant_credits(payload: CreditGrant, db: AsyncSession = Depends(get_db)
 
 
 @router.post("/request", response_model=CreditRequestResponse, status_code=status.HTTP_202_ACCEPTED)
-async def request_credits(payload: CreditRequest, db: AsyncSession = Depends(get_db)):
-    """Request additional credits.
+async def request_credits(
+    payload: CreditRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Request additional credits (fires registered webhooks)."""
+    if user.role != "admin" and payload.user_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only request credits for your own account.",
+        )
 
-    Validates the user exists then fires all active webhooks subscribed to the
-    ``credit.request`` event so that an operator can review and fulfil the
-    request.
-    """
-    user = await db.get(User, payload.user_id)
-    if user is None:
+    target = await db.get(User, payload.user_id)
+    if target is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
 
     result = await db.execute(select(Webhook).where(Webhook.active.is_(True)))
     webhooks = result.scalars().all()
 
-    webhook_payload = {
-        "user_id": str(payload.user_id),
-        "message": payload.message,
-    }
+    webhook_payload = {"user_id": str(payload.user_id), "message": payload.message}
     fired = await fire_webhooks(webhooks, "credit.request", webhook_payload)
 
     logger.info("Credit request from user %s – %d webhook(s) fired", payload.user_id, fired)

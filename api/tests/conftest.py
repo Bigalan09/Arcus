@@ -3,16 +3,8 @@
 Uses an in-memory SQLite database (via aiosqlite) so tests run without a real
 PostgreSQL instance.  The application's async engine is replaced before the
 app is imported so all ORM calls hit the test database.
-
-Limitation: SQLite does not support PostgreSQL-specific types (UUID, TIMESTAMPTZ)
-or transaction isolation semantics.  For full integration coverage, run the stack
-with ``docker compose up`` and point DATABASE_URL at a real PostgreSQL instance.
 """
 
-# ---------------------------------------------------------------------------
-# Override the database URL *before* any application module is loaded so that
-# the engine that ``database.py`` creates points at SQLite.
-# ---------------------------------------------------------------------------
 import os
 
 import pytest_asyncio
@@ -23,12 +15,9 @@ os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 os.environ.setdefault("CLOUDFLARE_API_TOKEN", "")
 os.environ.setdefault("CLOUDFLARE_ZONE_ID", "")
 
-from api.database import Base, get_db  # noqa: E402 – must come after env override
+from api.database import Base, get_db  # noqa: E402
 from api.main import app  # noqa: E402
 
-# ---------------------------------------------------------------------------
-# Build a fresh in-process engine for every test session
-# ---------------------------------------------------------------------------
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
 test_engine = create_async_engine(
@@ -62,3 +51,34 @@ async def client():
         yield ac
 
     app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# Auth helpers
+# ---------------------------------------------------------------------------
+
+ADMIN_EMAIL = "admin@test.arcus"
+ADMIN_PASSWORD = "TestAdmin1!"
+
+
+@pytest_asyncio.fixture
+async def admin_token(client):
+    """Create the admin user via /auth/setup and return a JWT access token."""
+    resp = await client.post(
+        "/auth/setup",
+        json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+    )
+    assert resp.status_code == 201, resp.text
+
+    login_resp = await client.post(
+        "/auth/login",
+        json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+    )
+    assert login_resp.status_code == 200, login_resp.text
+    return login_resp.json()["access_token"]
+
+
+@pytest_asyncio.fixture
+async def admin_headers(admin_token):
+    """Return HTTP headers with admin Bearer JWT."""
+    return {"Authorization": f"Bearer {admin_token}"}
