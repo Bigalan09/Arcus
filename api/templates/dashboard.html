@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+{% block title %}Dashboard – Arcus{% endblock %}
+{% block content %}
+<div class="space-y-8">
+  <!-- Header -->
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-2xl font-semibold">Dashboard</h1>
+      <p class="text-gray-400 text-sm mt-1">
+        {{ user.email }}
+        <span class="ml-2 inline-block text-xs px-2 py-0.5 rounded-full
+          {% if user.role == 'admin' %}bg-red-900/60 text-red-300
+          {% elif user.role == 'pro' %}bg-indigo-900/60 text-indigo-300
+          {% else %}bg-gray-800 text-gray-400{% endif %}">{{ user.role }}</span>
+      </p>
+    </div>
+    <a href="/change-password"
+       class="text-sm text-gray-400 hover:text-white border border-gray-700 rounded-lg px-3 py-1.5">
+      Change password
+    </a>
+  </div>
+
+  <!-- Credits -->
+  <section class="bg-gray-900 rounded-xl p-5 border border-gray-800">
+    <div class="flex items-center justify-between mb-1">
+      <h2 class="font-medium">Credits</h2>
+      <button onclick="requestCredits()"
+        class="text-xs text-indigo-400 hover:text-indigo-300">Request more</button>
+    </div>
+    <p class="text-3xl font-bold" id="balance">–</p>
+  </section>
+
+  <!-- API Tokens -->
+  <section class="bg-gray-900 rounded-xl p-5 border border-gray-800">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="font-medium">API Tokens</h2>
+      <button onclick="showCreateToken()"
+        class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-3 py-1.5">
+        New token
+      </button>
+    </div>
+
+    <!-- New token form (hidden by default) -->
+    <div id="token-form" class="hidden mb-4 space-y-3">
+      <input id="token-name" type="text" placeholder="Token name" maxlength="64"
+        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
+      <div class="flex gap-2">
+        <button onclick="createToken()"
+          class="bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-4 py-1.5 text-sm">Create</button>
+        <button onclick="hideCreateToken()"
+          class="bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg px-4 py-1.5 text-sm">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Token reveal (shown once after creation) -->
+    <div id="token-reveal" class="hidden mb-4 bg-gray-800 rounded-lg p-4 border border-green-700">
+      <p class="text-xs text-green-400 mb-2">Copy this token – it won't be shown again.</p>
+      <code id="token-value" class="text-sm break-all text-green-300"></code>
+      <button onclick="document.getElementById('token-reveal').classList.add('hidden')"
+        class="mt-2 text-xs text-gray-400 hover:text-white block">Dismiss</button>
+    </div>
+
+    <ul id="token-list" class="space-y-2 text-sm text-gray-300">
+      <li class="text-gray-500 text-sm">Loading…</li>
+    </ul>
+    <p id="token-limit-msg" class="hidden text-xs text-gray-500 mt-3"></p>
+  </section>
+
+  <!-- Subdomains -->
+  <section class="bg-gray-900 rounded-xl p-5 border border-gray-800">
+    <h2 class="font-medium mb-4">Subdomains</h2>
+    <ul id="subdomain-list" class="space-y-2 text-sm text-gray-300">
+      <li class="text-gray-500 text-sm">Loading…</li>
+    </ul>
+  </section>
+
+  {% if user.role in ('pro', 'admin') %}
+  <!-- Webhooks (pro/admin) -->
+  <section class="bg-gray-900 rounded-xl p-5 border border-gray-800">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="font-medium">Webhook Subscriptions</h2>
+      <button onclick="showWebhookForm()"
+        class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-3 py-1.5">
+        Add webhook
+      </button>
+    </div>
+    <div id="webhook-form" class="hidden mb-4 space-y-3">
+      <input id="wh-url" type="url" placeholder="https://example.com/hook"
+        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
+      <input id="wh-events" type="text" placeholder="Events (comma-separated, e.g. credit.request)"
+        value="credit.request"
+        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
+      <div class="flex gap-2">
+        <button onclick="createWebhook()"
+          class="bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-4 py-1.5 text-sm">Save</button>
+        <button onclick="document.getElementById('webhook-form').classList.add('hidden')"
+          class="bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg px-4 py-1.5 text-sm">Cancel</button>
+      </div>
+    </div>
+    <ul id="webhook-list" class="space-y-2 text-sm text-gray-300">
+      <li class="text-gray-500 text-sm">Loading…</li>
+    </ul>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const ROLE = '{{ user.role }}';
+  const TOKEN_LIMITS = { normal: 1, pro: 5, admin: null };
+
+  async function api(path, opts = {}) {
+    const r = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+    if (r.status === 401) { window.location.href = '/login'; return null; }
+    return r;
+  }
+
+  async function loadBalance() {
+    const r = await api('/credits');
+    if (!r) return;
+    if (r.ok) {
+      const j = await r.json();
+      document.getElementById('balance').textContent = j.balance;
+    }
+  }
+
+  async function loadTokens() {
+    const r = await api('/tokens');
+    if (!r) return;
+    const tokens = await r.json();
+    const list = document.getElementById('token-list');
+    const lim = TOKEN_LIMITS[ROLE];
+    if (!tokens.length) {
+      list.innerHTML = '<li class="text-gray-500">No tokens yet.</li>';
+    } else {
+      list.innerHTML = tokens.map(t => `
+        <li class="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2">
+          <span>${t.name}</span>
+          <button onclick="revokeToken('${t.id}')" class="text-red-400 hover:text-red-300 text-xs ml-4">Revoke</button>
+        </li>`).join('');
+    }
+    const msg = document.getElementById('token-limit-msg');
+    if (lim !== null) {
+      msg.textContent = `${tokens.length} / ${lim} token(s) used`;
+      msg.classList.remove('hidden');
+    }
+  }
+
+  async function loadSubdomains() {
+    const r = await api('/subdomains');
+    if (!r) return;
+    const subs = await r.json();
+    const list = document.getElementById('subdomain-list');
+    if (!subs.length) {
+      list.innerHTML = '<li class="text-gray-500">No subdomains yet.</li>';
+    } else {
+      list.innerHTML = subs.map(s => `
+        <li class="bg-gray-800 rounded-lg px-3 py-2">
+          <span class="font-mono">${s.slug}</span>
+          <span class="ml-2 text-gray-400 text-xs">${s.origin_host ? s.origin_host + ':' + s.origin_port : 'no origin'}</span>
+        </li>`).join('');
+    }
+  }
+
+  async function loadWebhooks() {
+    if (!['pro', 'admin'].includes(ROLE)) return;
+    const r = await api('/webhooks');
+    if (!r) return;
+    const hooks = await r.json();
+    const list = document.getElementById('webhook-list');
+    if (!hooks.length) {
+      list.innerHTML = '<li class="text-gray-500">No webhooks yet.</li>';
+    } else {
+      list.innerHTML = hooks.map(h => `
+        <li class="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2">
+          <span class="font-mono text-xs truncate">${h.url}</span>
+          <button onclick="deleteWebhook('${h.id}')" class="text-red-400 hover:text-red-300 text-xs ml-4">Delete</button>
+        </li>`).join('');
+    }
+  }
+
+  function showCreateToken() {
+    document.getElementById('token-form').classList.remove('hidden');
+    document.getElementById('token-name').focus();
+  }
+  function hideCreateToken() {
+    document.getElementById('token-form').classList.add('hidden');
+    document.getElementById('token-name').value = '';
+  }
+
+  async function createToken() {
+    const name = document.getElementById('token-name').value.trim();
+    if (!name) return;
+    const r = await api('/tokens', { method: 'POST', body: JSON.stringify({ name }) });
+    if (!r) return;
+    if (r.status === 409) {
+      alert((await r.json()).detail);
+      return;
+    }
+    const j = await r.json();
+    document.getElementById('token-value').textContent = j.token;
+    document.getElementById('token-reveal').classList.remove('hidden');
+    hideCreateToken();
+    loadTokens();
+  }
+
+  async function revokeToken(id) {
+    if (!confirm('Revoke this token?')) return;
+    await api('/tokens/' + id, { method: 'DELETE' });
+    loadTokens();
+  }
+
+  function showWebhookForm() {
+    document.getElementById('webhook-form').classList.remove('hidden');
+    document.getElementById('wh-url').focus();
+  }
+
+  async function createWebhook() {
+    const url = document.getElementById('wh-url').value.trim();
+    const events = document.getElementById('wh-events').value.split(',').map(e => e.trim()).filter(Boolean);
+    if (!url) return;
+    const r = await api('/webhooks', { method: 'POST', body: JSON.stringify({ url, events, active: true }) });
+    if (!r) return;
+    document.getElementById('webhook-form').classList.add('hidden');
+    loadWebhooks();
+  }
+
+  async function deleteWebhook(id) {
+    if (!confirm('Delete this webhook?')) return;
+    await api('/webhooks/' + id, { method: 'DELETE' });
+    loadWebhooks();
+  }
+
+  async function requestCredits() {
+    const msg = prompt('Optional message (why do you need credits)?');
+    if (msg === null) return;
+    const r = await api('/credits/request', {
+      method: 'POST',
+      body: JSON.stringify({ user_id: {{ user.id | string | tojson }}, message: msg || null })
+    });
+    if (r && r.ok) alert('Request sent!');
+  }
+
+  loadBalance();
+  loadTokens();
+  loadSubdomains();
+  loadWebhooks();
+</script>
+{% endblock %}

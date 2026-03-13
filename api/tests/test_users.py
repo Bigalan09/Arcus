@@ -1,12 +1,12 @@
-"""RED tests for POST /users – must fail until the route is implemented."""
+"""Tests for POST /users."""
 
 import pytest
 
 
 @pytest.mark.asyncio
-async def test_create_user_success(client):
+async def test_create_user_success(client, admin_headers):
     """Creating a user with a valid e-mail returns 201 with the user object."""
-    resp = await client.post("/users", json={"email": "alice@example.com"})
+    resp = await client.post("/users", json={"email": "alice@example.com"}, headers=admin_headers)
     assert resp.status_code == 201
     data = resp.json()
     assert data["email"] == "alice@example.com"
@@ -15,17 +15,17 @@ async def test_create_user_success(client):
 
 
 @pytest.mark.asyncio
-async def test_create_user_duplicate_email(client):
+async def test_create_user_duplicate_email(client, admin_headers):
     """Creating two users with the same e-mail returns 409 on the second."""
-    await client.post("/users", json={"email": "bob@example.com"})
-    resp = await client.post("/users", json={"email": "bob@example.com"})
+    await client.post("/users", json={"email": "bob@example.com"}, headers=admin_headers)
+    resp = await client.post("/users", json={"email": "bob@example.com"}, headers=admin_headers)
     assert resp.status_code == 409
 
 
 @pytest.mark.asyncio
-async def test_create_user_invalid_email(client):
+async def test_create_user_invalid_email(client, admin_headers):
     """An invalid e-mail returns 422."""
-    resp = await client.post("/users", json={"email": "not-an-email"})
+    resp = await client.post("/users", json={"email": "not-an-email"}, headers=admin_headers)
     assert resp.status_code == 422
 
 

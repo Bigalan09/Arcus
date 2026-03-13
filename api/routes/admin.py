@@ -1,59 +1,144 @@
-"""Admin blocklist management routes.
+"""Admin routes.
 
-All endpoints require an ``X-Api-Key`` header matching ``API_SECRET_KEY``.
+Blocklist management and user management require admin JWT authentication.
 
 Endpoints
 ---------
-GET    /admin/blocklist           – list all blocked words
-POST   /admin/blocklist           – add one or more words (JSON body)
-DELETE /admin/blocklist/{word}    – remove a single word
-GET    /admin/blocklist/export    – download the list as a CSV file
-POST   /admin/blocklist/import    – upload a CSV file (?mode=append|replace)
+GET    /admin/users                 – list all users
+POST   /admin/users                 – create a user (emails temp password)
+POST   /admin/users/{id}/reset-password – reset a user's password (resend email)
+GET    /admin/blocklist             – list all blocked words
+POST   /admin/blocklist             – add words
+DELETE /admin/blocklist/{word}      – remove a word
+GET    /admin/blocklist/export      – download CSV
+POST   /admin/blocklist/import      – upload CSV
 """
 
 import csv
 import io
 import logging
+import uuid as _uuid
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Security, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
-from fastapi.security.api_key import APIKeyHeader
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.config import settings
 from api.database import get_db
-from api.models import Blocklist
-from api.schemas import BlocklistAddRequest, BlocklistEntry, BlocklistImportResult
+from api.models import Blocklist, Credit, User
+from api.schemas import (
+    AdminUserCreate,
+    AdminUserResponse,
+    BlocklistAddRequest,
+    BlocklistEntry,
+    BlocklistImportResult,
+)
+from api.utils.auth import generate_temp_password, hash_password
+from api.utils.deps import require_admin
+from api.utils.email import send_password_reset_email, send_welcome_email
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin"])
 
+
 # ---------------------------------------------------------------------------
-# Auth dependency
+# User management
 # ---------------------------------------------------------------------------
-_api_key_header = APIKeyHeader(name="X-Api-Key", auto_error=False)
 
 
-async def require_api_key(api_key: str | None = Security(_api_key_header)) -> str:
-    if not api_key or api_key != settings.api_secret_key:
+@router.get("/users", response_model=list[AdminUserResponse])
+async def list_users(
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return all user accounts."""
+    result = await db.execute(select(User).order_by(User.created_at))
+    return result.scalars().all()
+
+
+@router.post("/users", response_model=AdminUserResponse, status_code=status.HTTP_201_CREATED)
+async def create_user_admin(
+    payload: AdminUserCreate,
+    background_tasks: BackgroundTasks,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new user account.
+
+    A random temporary password is generated and emailed to the user (via
+    background task so the response is not blocked by SMTP).
+    The user must change it on first login.
+    """
+    if payload.role == "admin":
+        result = await db.execute(select(func.count()).select_from(User).where(User.role == "admin"))
+        if result.scalar_one() > 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An admin user already exists. Only one admin is permitted.",
+            )
+
+    temp_password = generate_temp_password()
+    user = User(
+        email=payload.email,
+        role=payload.role,
+        password_hash=hash_password(temp_password),
+        must_change_password=True,
+    )
+    db.add(user)
+    try:
+        await db.flush()
+        db.add(Credit(user_id=user.id, balance=0))
+        await db.commit()
+        await db.refresh(user)
+    except IntegrityError:
+        await db.rollback()
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing API key.",
-        )
-    return api_key
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A user with that e-mail address already exists.",
+        ) from None
+
+    logger.info("Admin %s created user %s (role=%s)", admin.id, user.email, user.role)
+    background_tasks.add_task(send_welcome_email, user.email, temp_password)
+    return user
+
+
+@router.post("/users/{user_id}/reset-password", status_code=status.HTTP_204_NO_CONTENT)
+async def reset_user_password(
+    user_id: str,
+    background_tasks: BackgroundTasks,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Reset a user's password: generate a new temp password and email it (non-blocking)."""
+    try:
+        uid = _uuid.UUID(user_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid user ID.") from None
+
+    user = await db.get(User, uid)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+
+    temp_password = generate_temp_password()
+    user.password_hash = hash_password(temp_password)
+    user.must_change_password = True
+    await db.commit()
+
+    logger.info("Admin %s reset password for user %s", admin.id, user.id)
+    background_tasks.add_task(send_password_reset_email, user.email, temp_password)
 
 
 # ---------------------------------------------------------------------------
-# List
+# Blocklist – List
 # ---------------------------------------------------------------------------
+
 
 @router.get("/blocklist", response_model=list[BlocklistEntry])
 async def list_blocklist(
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(require_api_key),
+    _: User = Depends(require_admin),
 ):
     """Return all words currently on the blocklist."""
     result = await db.execute(select(Blocklist).order_by(Blocklist.word))
@@ -61,14 +146,15 @@ async def list_blocklist(
 
 
 # ---------------------------------------------------------------------------
-# Add (single or batch)
+# Blocklist – Add
 # ---------------------------------------------------------------------------
+
 
 @router.post("/blocklist", response_model=list[BlocklistEntry], status_code=status.HTTP_201_CREATED)
 async def add_to_blocklist(
     payload: BlocklistAddRequest,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(require_api_key),
+    _: User = Depends(require_admin),
 ):
     """Add one or more words to the blocklist. Duplicates are silently ignored."""
     for raw_word in payload.words:
@@ -85,7 +171,6 @@ async def add_to_blocklist(
     except IntegrityError:
         await db.rollback()
 
-    # Re-fetch so created_at is populated.
     result = await db.execute(
         select(Blocklist).where(Blocklist.word.in_([w.strip().lower() for w in payload.words]))
     )
@@ -93,14 +178,15 @@ async def add_to_blocklist(
 
 
 # ---------------------------------------------------------------------------
-# Delete
+# Blocklist – Delete
 # ---------------------------------------------------------------------------
+
 
 @router.delete("/blocklist/{word}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_from_blocklist(
     word: str,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(require_api_key),
+    _: User = Depends(require_admin),
 ):
     """Remove a single word from the blocklist."""
     result = await db.execute(select(Blocklist).where(Blocklist.word == word.lower()))
@@ -115,13 +201,14 @@ async def remove_from_blocklist(
 
 
 # ---------------------------------------------------------------------------
-# CSV export
+# Blocklist – CSV export
 # ---------------------------------------------------------------------------
+
 
 @router.get("/blocklist/export")
 async def export_blocklist_csv(
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(require_api_key),
+    _: User = Depends(require_admin),
 ):
     """Download the entire blocklist as a CSV file."""
     result = await db.execute(select(Blocklist.word).order_by(Blocklist.word))
@@ -142,24 +229,21 @@ async def export_blocklist_csv(
 
 
 # ---------------------------------------------------------------------------
-# CSV import
+# Blocklist – CSV import
 # ---------------------------------------------------------------------------
+
 
 @router.post("/blocklist/import", response_model=BlocklistImportResult)
 async def import_blocklist_csv(
     request: Request,
     mode: Literal["append", "replace"] = Query(
         default="append",
-        description="'append' adds new words to the existing list; 'replace' clears the list first.",
+        description="'append' adds new words; 'replace' clears first.",
     ),
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(require_api_key),
+    _: User = Depends(require_admin),
 ):
-    """Import a CSV file of blocked words.
-
-    The CSV must have a single ``word`` column (header optional).
-    Lines starting with ``#`` and blank lines are ignored.
-    """
+    """Import a CSV file of blocked words."""
     body = await request.body()
     text_body = body.decode("utf-8", errors="replace")
 
@@ -172,7 +256,7 @@ async def import_blocklist_csv(
         if not cell or cell.startswith("#"):
             continue
         if i == 0 and cell.lower() == "word":
-            continue  # skip header row
+            continue
         words.append(cell.lower())
 
     if mode == "replace":

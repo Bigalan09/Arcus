@@ -20,9 +20,72 @@ class UserResponse(BaseModel):
     id: uuid.UUID
     email: str
     role: str
+    must_change_password: bool
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Auth
+# ---------------------------------------------------------------------------
+
+
+class SetupRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8, description="Initial admin password (≥ 8 characters)")
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    must_change_password: bool
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=8, description="New password (≥ 8 characters)")
+
+
+# ---------------------------------------------------------------------------
+# API Tokens
+# ---------------------------------------------------------------------------
+
+
+class ApiTokenCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=64, description="Friendly name for the token")
+
+
+class ApiTokenResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    created_at: datetime
+    last_used_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class ApiTokenCreatedResponse(ApiTokenResponse):
+    token: str = Field(description="Raw token value – shown only once")
+
+
+# ---------------------------------------------------------------------------
+# Admin user management
+# ---------------------------------------------------------------------------
+
+
+class AdminUserCreate(BaseModel):
+    email: EmailStr
+    role: UserRole = "normal"
+
+
+class AdminUserResponse(UserResponse):
+    pass
 
 
 # ---------------------------------------------------------------------------

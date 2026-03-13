@@ -14,3 +14,5 @@ venv/
 *.sqlite3
 *.db
 letsencrypt/
+node_modules/
+package-lock.json
