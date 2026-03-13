@@ -41,7 +41,7 @@ def validate_origin_host(host: str) -> str:
 
     # Try to parse as an IP address first.
     try:
-        addr = ipaddress.ip_address(host)
+        ipaddress.ip_address(host)  # validates format; raises ValueError if not a valid IP
         if _is_private_ip(host):
             raise ValueError(
                 "Private, loopback, and link-local IP addresses are not permitted as origin hosts."
