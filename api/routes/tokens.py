@@ -41,9 +41,11 @@ async def create_token(
     """
     limit = API_TOKEN_LIMITS.get(user.role)
     if limit is not None:
-        result = await db.execute(select(ApiToken).where(ApiToken.user_id == user.id))
-        existing_count = len(result.scalars().all())
-        if existing_count >= limit:
+        from sqlalchemy import func as _func
+        count_result = await db.execute(
+            select(_func.count()).select_from(ApiToken).where(ApiToken.user_id == user.id)
+        )
+        if count_result.scalar_one() >= limit:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Token limit reached. Your plan allows {limit} token(s).",

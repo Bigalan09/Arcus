@@ -20,7 +20,7 @@ import logging
 import uuid as _uuid
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
@@ -61,12 +61,14 @@ async def list_users(
 @router.post("/users", response_model=AdminUserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user_admin(
     payload: AdminUserCreate,
+    background_tasks: BackgroundTasks,
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new user account.
 
-    A random temporary password is generated and emailed to the user.
+    A random temporary password is generated and emailed to the user (via
+    background task so the response is not blocked by SMTP).
     The user must change it on first login.
     """
     if payload.role == "admin":
@@ -98,17 +100,18 @@ async def create_user_admin(
         ) from None
 
     logger.info("Admin %s created user %s (role=%s)", admin.id, user.email, user.role)
-    await send_welcome_email(user.email, temp_password)
+    background_tasks.add_task(send_welcome_email, user.email, temp_password)
     return user
 
 
 @router.post("/users/{user_id}/reset-password", status_code=status.HTTP_204_NO_CONTENT)
 async def reset_user_password(
     user_id: str,
+    background_tasks: BackgroundTasks,
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Reset a user's password: generate a new temp password and email it."""
+    """Reset a user's password: generate a new temp password and email it (non-blocking)."""
     try:
         uid = _uuid.UUID(user_id)
     except ValueError:
@@ -124,7 +127,7 @@ async def reset_user_password(
     await db.commit()
 
     logger.info("Admin %s reset password for user %s", admin.id, user.id)
-    await send_password_reset_email(user.email, temp_password)
+    background_tasks.add_task(send_password_reset_email, user.email, temp_password)
 
 
 # ---------------------------------------------------------------------------

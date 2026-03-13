@@ -55,9 +55,10 @@ async def _user_from_api_token(raw_token: str, db: AsyncSession) -> User | None:
     api_token = result.scalar_one_or_none()
     if api_token is None:
         return None
-    # Update last_used_at asynchronously (best-effort)
+    # Update last_used_at best-effort (no await to avoid blocking the request)
     api_token.last_used_at = datetime.now(UTC)
-    await db.commit()
+    db.add(api_token)
+    # Commit is deferred; the session will be flushed at end of request
     return await db.get(User, api_token.user_id)
 
 

@@ -236,7 +236,7 @@
     if (msg === null) return;
     const r = await api('/credits/request', {
       method: 'POST',
-      body: JSON.stringify({ user_id: '{{ user.id }}', message: msg || null })
+      body: JSON.stringify({ user_id: {{ user.id | tojson }}, message: msg || null })
     });
     if (r && r.ok) alert('Request sent!');
   }
