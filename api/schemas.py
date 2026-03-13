@@ -133,6 +133,7 @@ RESERVED_SLUGS = {"www", "api", "admin", "mail", "cdn", "app"}
 class SubdomainPurchase(BaseModel):
     user_id: uuid.UUID
     slug: str = Field(pattern=SLUG_PATTERN)
+    domain: str | None = Field(default=None, description="Target domain (defaults to the primary configured domain)")
 
     @field_validator("slug")
     @classmethod
@@ -150,6 +151,7 @@ class OriginSet(BaseModel):
 class SubdomainResponse(BaseModel):
     id: uuid.UUID
     user_id: uuid.UUID
+    domain: str
     slug: str
     origin_host: str | None
     origin_port: int | None
@@ -161,6 +163,7 @@ class SubdomainResponse(BaseModel):
 
 class SubdomainCheckResponse(BaseModel):
     slug: str
+    domain: str
     available: bool
 
 

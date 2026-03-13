@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Integer, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Index, Integer, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -49,9 +49,15 @@ class Credit(Base):
 class Subdomain(Base):
     __tablename__ = "subdomains"
 
+    __table_args__ = (
+        UniqueConstraint("slug", "domain", name="uq_subdomains_slug_domain"),
+        Index("idx_subdomains_domain", "domain"),
+    )
+
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    slug: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    domain: Mapped[str] = mapped_column(Text, nullable=False)
+    slug: Mapped[str] = mapped_column(Text, nullable=False)
     origin_host: Mapped[str | None] = mapped_column(Text, nullable=True)
     origin_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

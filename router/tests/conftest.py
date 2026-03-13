@@ -34,10 +34,12 @@ _DDL = [
     """CREATE TABLE IF NOT EXISTS subdomains (
         id          TEXT PRIMARY KEY,
         user_id     TEXT NOT NULL,
-        slug        TEXT UNIQUE NOT NULL,
+        slug        TEXT NOT NULL,
+        domain      TEXT NOT NULL DEFAULT 'bigalan.dev',
         origin_host TEXT,
         origin_port INTEGER,
-        active      INTEGER NOT NULL DEFAULT 1
+        active      INTEGER NOT NULL DEFAULT 1,
+        UNIQUE(slug, domain)
     )""",
 ]
 
@@ -78,7 +80,8 @@ async def client(mock_http_client):
 # ---------------------------------------------------------------------------
 
 async def insert_subdomain(role: str = "normal", slug: str = "testslug",
-                            origin_host: str = "203.0.113.1", origin_port: int = 8080) -> str:
+                            origin_host: str = "203.0.113.1", origin_port: int = 8080,
+                            domain: str = "bigalan.dev") -> str:
     user_id = str(uuid.uuid4())
     async with TestSessionLocal() as session:
         await session.execute(
@@ -87,10 +90,10 @@ async def insert_subdomain(role: str = "normal", slug: str = "testslug",
         )
         await session.execute(
             text(
-                "INSERT INTO subdomains (id, user_id, slug, origin_host, origin_port) "
-                "VALUES (:id, :uid, :slug, :host, :port)"
+                "INSERT INTO subdomains (id, user_id, slug, domain, origin_host, origin_port) "
+                "VALUES (:id, :uid, :slug, :domain, :host, :port)"
             ),
-            {"id": str(uuid.uuid4()), "uid": user_id, "slug": slug,
+            {"id": str(uuid.uuid4()), "uid": user_id, "slug": slug, "domain": domain,
              "host": origin_host, "port": origin_port},
         )
         await session.commit()

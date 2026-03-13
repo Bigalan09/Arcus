@@ -19,6 +19,7 @@ async def test_check_slug_available(client):
     data = resp.json()
     assert data["slug"] == "freeone"
     assert data["available"] is True
+    assert "domain" in data  # domain field present in response
 
 
 @pytest.mark.asyncio

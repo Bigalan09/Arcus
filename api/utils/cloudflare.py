@@ -11,8 +11,10 @@ logger = logging.getLogger(__name__)
 _CF_API = "https://api.cloudflare.com/client/v4"
 
 
-async def create_dns_record(slug: str, proxy_ip: str | None = None) -> None:
-    """Create a CNAME (or A) record for *slug*.*BASE_DOMAIN* pointing to the proxy.
+async def create_dns_record(slug: str, domain: str | None = None, proxy_ip: str | None = None) -> None:
+    """Create a CNAME (or A) record for *slug*.*domain* pointing to the proxy.
+
+    *domain* defaults to the primary configured domain when not supplied.
 
     If *proxy_ip* is None the record is a CNAME to the base domain itself so
     the wildcard record handles routing.  When an explicit IP is supplied an A
@@ -21,11 +23,14 @@ async def create_dns_record(slug: str, proxy_ip: str | None = None) -> None:
     Failures are logged but **do not** raise – the purchase still succeeds; the
     operator can manually fix DNS if needed.
     """
-    if not settings.cloudflare_api_token or not settings.cloudflare_zone_id:
-        logger.warning("Cloudflare credentials not configured – skipping DNS record creation.")
+    actual_domain = domain or settings.primary_domain
+    zone_id = settings.get_zone_id_for_domain(actual_domain)
+
+    if not settings.cloudflare_api_token or not zone_id:
+        logger.warning("Cloudflare credentials not configured for '%s' – skipping DNS record creation.", actual_domain)
         return
 
-    fqdn = f"{slug}.{settings.base_domain}"
+    fqdn = f"{slug}.{actual_domain}"
     headers = {
         "Authorization": f"Bearer {settings.cloudflare_api_token}",
         "Content-Type": "application/json",
@@ -43,12 +48,12 @@ async def create_dns_record(slug: str, proxy_ip: str | None = None) -> None:
         payload = {
             "type": "CNAME",
             "name": fqdn,
-            "content": settings.base_domain,
+            "content": actual_domain,
             "ttl": 1,
             "proxied": True,
         }
 
-    url = f"{_CF_API}/zones/{settings.cloudflare_zone_id}/dns_records"
+    url = f"{_CF_API}/zones/{zone_id}/dns_records"
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(url, headers=headers, json=payload)

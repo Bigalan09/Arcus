@@ -13,11 +13,11 @@ BASE = "bigalan.dev"
 # ---------------------------------------------------------------------------
 
 def test_extract_slug_valid():
-    assert _extract_slug(f"myapp.{BASE}") == "myapp"
+    assert _extract_slug(f"myapp.{BASE}") == ("myapp", BASE)
 
 
 def test_extract_slug_strips_port():
-    assert _extract_slug(f"myapp.{BASE}:443") == "myapp"
+    assert _extract_slug(f"myapp.{BASE}:443") == ("myapp", BASE)
 
 
 def test_extract_slug_not_subdomain():
@@ -101,3 +101,42 @@ async def test_arcus_continue_param_sets_cookie_and_proxies(client):
     assert resp.status_code == 200
     assert resp.content == b"origin ok"
     assert "_arcus_pass" in resp.headers.get("set-cookie", "")
+
+
+# ---------------------------------------------------------------------------
+# Multi-domain routing tests
+# ---------------------------------------------------------------------------
+
+def test_extract_slug_second_domain(monkeypatch):
+    """_extract_slug recognises slugs on a second configured domain."""
+    import router.main as router_module
+    monkeypatch.setattr(router_module, "CONFIGURED_DOMAINS", ["bigalan.dev", "another.dev"])
+    assert router_module._extract_slug("myapp.another.dev") == ("myapp", "another.dev")
+    assert router_module._extract_slug("myapp.bigalan.dev") == ("myapp", "bigalan.dev")
+
+
+@pytest.mark.asyncio
+async def test_subdomain_on_second_domain_is_proxied(client, monkeypatch):
+    """A subdomain on a second configured domain is proxied correctly."""
+    import router.main as router_module
+    monkeypatch.setattr(router_module, "CONFIGURED_DOMAINS", ["bigalan.dev", "another.dev"])
+
+    await insert_subdomain(role="pro", slug="multisite", domain="another.dev")
+    resp = await client.get("/", headers={"host": "multisite.another.dev"})
+    assert resp.status_code == 200
+    assert resp.content == b"origin ok"
+
+
+@pytest.mark.asyncio
+async def test_same_slug_different_domains_are_independent(client, monkeypatch):
+    """The same slug on two domains resolves to two independent subdomains."""
+    import router.main as router_module
+    monkeypatch.setattr(router_module, "CONFIGURED_DOMAINS", ["bigalan.dev", "another.dev"])
+
+    await insert_subdomain(role="pro", slug="shared", domain="bigalan.dev")
+    await insert_subdomain(role="admin", slug="shared", domain="another.dev")
+
+    resp1 = await client.get("/", headers={"host": "shared.bigalan.dev"})
+    resp2 = await client.get("/", headers={"host": "shared.another.dev"})
+    assert resp1.status_code == 200
+    assert resp2.status_code == 200

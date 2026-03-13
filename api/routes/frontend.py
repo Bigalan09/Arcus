@@ -102,13 +102,16 @@ async def dashboard_page(
     arcus_session: str | None = Cookie(default=None),
     db: AsyncSession = Depends(get_db),
 ):
+    from api.config import settings
+
     user = await get_current_user_optional(credentials=None, session_token=arcus_session, db=db)
     if user is None:
         return RedirectResponse("/login", status_code=302)
     if user.must_change_password:
         return RedirectResponse("/change-password", status_code=302)
     flash = "Password updated successfully." if changed == "1" else None
-    return _render(request, "dashboard.html", user=user, flash=flash, flash_type="success")
+    domains = [dc.domain for dc in settings.configured_domains]
+    return _render(request, "dashboard.html", user=user, flash=flash, flash_type="success", domains=domains)
 
 
 # ---------------------------------------------------------------------------
