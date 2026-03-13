@@ -20,7 +20,7 @@
     </div>
     {% endif %}
   </nav>
-  <main class="max-w-2xl mx-auto px-4 py-10">
+  <main class="{{ main_class or 'max-w-2xl' }} mx-auto px-4 py-10">
     {% if flash %}
     <div id="flash" class="mb-6 rounded-lg px-4 py-3 text-sm
       {% if flash_type == 'error' %}bg-red-900/60 text-red-300{% else %}bg-green-900/60 text-green-300{% endif %}">

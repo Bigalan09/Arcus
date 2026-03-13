@@ -1,7 +1,7 @@
 """FastAPI dependency helpers for authentication and authorisation."""
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import jwt
 from fastapi import Cookie, Depends, HTTPException, Security, status
@@ -26,6 +26,12 @@ API_TOKEN_LIMITS: dict[str, int | None] = {
     "pro": 5,
     "admin": None,  # unlimited
 }
+API_TOKEN_MAX_AGE = timedelta(days=90)
+
+
+def api_token_cutoff() -> datetime:
+    """Return the oldest allowed creation time for API tokens."""
+    return datetime.now(UTC) - API_TOKEN_MAX_AGE
 
 
 # ---------------------------------------------------------------------------
@@ -55,6 +61,14 @@ async def _user_from_api_token(raw_token: str, db: AsyncSession) -> User | None:
     api_token = result.scalar_one_or_none()
     if api_token is None:
         return None
+
+    created_at = api_token.created_at
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=UTC)
+    if created_at < api_token_cutoff():
+        await db.delete(api_token)
+        return None
+
     # Update last_used_at best-effort (no await to avoid blocking the request)
     api_token.last_used_at = datetime.now(UTC)
     db.add(api_token)
@@ -104,6 +118,12 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token.",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if not user.active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is deactivated.",
         )
 
     return user

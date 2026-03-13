@@ -63,6 +63,8 @@ async def fire_webhooks(webhooks: list, event: str, payload: dict) -> int:
             headers: dict[str, str] = {"Content-Type": "application/json"}
             if wh.secret:
                 headers["X-Arcus-Signature"] = _sign(wh.secret, body)
+            if getattr(wh, "reference", None):
+                headers["X-Arcus-Webhook-Ref"] = wh.reference
 
             try:
                 resp = await client.post(str(wh.url), content=body, headers=headers)

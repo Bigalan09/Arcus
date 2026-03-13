@@ -22,6 +22,7 @@ class User(Base):
     )
     password_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
     must_change_password: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
 
     credits: Mapped["Credit"] = relationship("Credit", back_populates="user", uselist=False, cascade="all, delete-orphan")
@@ -75,6 +76,7 @@ class Webhook(Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True
     )
     url: Mapped[str] = mapped_column(Text, nullable=False)
+    reference: Mapped[str | None] = mapped_column(Text, nullable=True)
     secret: Mapped[str | None] = mapped_column(Text, nullable=True)
     events: Mapped[str] = mapped_column(Text, nullable=False, default="credit.request", server_default="credit.request")
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -94,4 +96,3 @@ class ApiToken(Base):
     last_used_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
     user: Mapped["User"] = relationship("User", back_populates="api_tokens")
-

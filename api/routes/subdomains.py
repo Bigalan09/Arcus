@@ -9,12 +9,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.database import get_db
-from api.models import Credit, Subdomain, User
+from api.models import Credit, Subdomain, User, Webhook
 from api.schemas import OriginSet, SubdomainCheckResponse, SubdomainPurchase, SubdomainResponse
 from api.utils.cloudflare import create_dns_record
 from api.utils.deps import get_current_user
 from api.utils.profanity import check_slug
 from api.utils.validation import validate_origin_host
+from api.utils.webhooks import fire_webhooks
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/subdomains", tags=["subdomains"])
@@ -40,15 +41,15 @@ async def purchase_subdomain(
     if target_user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
 
-    result = await db.execute(select(Credit).where(Credit.user_id == payload.user_id))
-    credit = result.scalar_one_or_none()
-    if credit is None or credit.balance < 1:
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail="Insufficient credits. Please top up your balance to purchase a subdomain.",
-        )
-
-    credit.balance -= 1
+    if target_user.role != "admin":
+        result = await db.execute(select(Credit).where(Credit.user_id == payload.user_id))
+        credit = result.scalar_one_or_none()
+        if credit is None or credit.balance < 1:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail="Insufficient credits. Please top up your balance to purchase a subdomain.",
+            )
+        credit.balance -= 1
 
     try:
         await check_slug(payload.slug, db)
@@ -71,6 +72,13 @@ async def purchase_subdomain(
 
     logger.info("User %s purchased subdomain '%s'", payload.user_id, payload.slug)
     await create_dns_record(payload.slug)
+    result = await db.execute(select(Webhook).where(Webhook.active.is_(True)))
+    webhooks = result.scalars().all()
+    await fire_webhooks(
+        webhooks,
+        "subdomain.purchased",
+        {"subdomain_id": str(subdomain.id), "user_id": str(subdomain.user_id), "slug": subdomain.slug},
+    )
     return subdomain
 
 
@@ -103,6 +111,19 @@ async def set_origin(
     await db.commit()
     await db.refresh(subdomain)
     logger.info("Origin set for '%s': %s:%d", slug, validated_host, payload.origin_port)
+    result = await db.execute(select(Webhook).where(Webhook.active.is_(True)))
+    webhooks = result.scalars().all()
+    await fire_webhooks(
+        webhooks,
+        "subdomain.origin.updated",
+        {
+            "subdomain_id": str(subdomain.id),
+            "user_id": str(subdomain.user_id),
+            "slug": subdomain.slug,
+            "origin_host": subdomain.origin_host,
+            "origin_port": subdomain.origin_port,
+        },
+    )
     return subdomain
 
 
@@ -136,3 +157,38 @@ async def list_subdomains(
 
     result = await db.execute(select(Subdomain).where(Subdomain.user_id == target_id))
     return result.scalars().all()
+
+
+@router.delete("/{slug}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_subdomain(
+    slug: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a subdomain."""
+    result = await db.execute(select(Subdomain).where(Subdomain.slug == slug))
+    subdomain = result.scalar_one_or_none()
+    if subdomain is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subdomain not found.")
+
+    if user.role != "admin" and subdomain.user_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only delete your own subdomains.",
+        )
+
+    subdomain_id = str(subdomain.id)
+    subdomain_user_id = str(subdomain.user_id)
+    subdomain_slug = subdomain.slug
+
+    await db.delete(subdomain)
+    await db.commit()
+    logger.info("Subdomain '%s' deleted by user %s", subdomain_slug, user.id)
+
+    result = await db.execute(select(Webhook).where(Webhook.active.is_(True)))
+    webhooks = result.scalars().all()
+    await fire_webhooks(
+        webhooks,
+        "subdomain.deleted",
+        {"subdomain_id": subdomain_id, "user_id": subdomain_user_id, "slug": subdomain_slug},
+    )

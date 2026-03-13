@@ -20,6 +20,7 @@
     </a>
   </div>
 
+  {% if user.role != 'admin' %}
   <!-- Credits -->
   <section class="bg-gray-900 rounded-xl p-5 border border-gray-800">
     <div class="flex items-center justify-between mb-1">
@@ -29,6 +30,7 @@
     </div>
     <p class="text-3xl font-bold" id="balance">–</p>
   </section>
+  {% endif %}
 
   <!-- API Tokens -->
   <section class="bg-gray-900 rounded-xl p-5 border border-gray-800">
@@ -74,7 +76,41 @@
 
   <!-- Subdomains -->
   <section class="bg-gray-900 rounded-xl p-5 border border-gray-800">
-    <h2 class="font-medium mb-4">Subdomains</h2>
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h2 class="font-medium">Subdomains</h2>
+        <p class="text-xs text-gray-500 mt-0.5">
+          {% if user.role == 'admin' %}Admin subdomains are unlimited.{% else %}Each purchase costs 1 credit.{% endif %}
+        </p>
+      </div>
+      <button onclick="showSubdomainForm()"
+        class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-3 py-1.5">
+        Add subdomain
+      </button>
+    </div>
+    <div id="subdomain-form" class="hidden mb-4 space-y-3">
+      <input id="subdomain-slug" type="text" placeholder="Slug (3-32 chars: a-z, 0-9)" maxlength="32"
+        oninput="onSubdomainSlugInput()" onblur="onSubdomainSlugBlur()"
+        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
+      <div id="slug-availability" class="hidden rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-xs flex items-center gap-2">
+        <span id="slug-availability-icon"></span>
+        <span id="slug-availability-text"></span>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <input id="subdomain-origin-host" type="text" placeholder="Origin host (optional)"
+          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
+        <input id="subdomain-origin-port" type="number" min="1" max="65535" placeholder="Origin port (optional)"
+          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
+      </div>
+      <p class="text-xs text-gray-500">Set host + port now, or add/edit origin later per subdomain.</p>
+      <div class="flex gap-2">
+        <button onclick="createSubdomain()"
+          class="bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-4 py-1.5 text-sm">Purchase</button>
+        <button onclick="hideSubdomainForm()"
+          class="bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg px-4 py-1.5 text-sm">Cancel</button>
+      </div>
+    </div>
+    <p id="subdomain-msg" class="hidden text-sm mb-4"></p>
     <ul id="subdomain-list" class="space-y-2 text-sm text-gray-300">
       <li class="text-gray-500 text-sm">Loading…</li>
     </ul>
@@ -98,15 +134,22 @@
       </button>
     </div>
     <div id="webhook-form" class="hidden mb-4 space-y-3">
+      <input id="wh-reference" type="text" placeholder="Reference tag (unique, optional)"
+        maxlength="64"
+        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
       <input id="wh-url" type="url" placeholder="https://example.com/hook"
         class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
-      <input id="wh-events" type="text" placeholder="Events (comma-separated, e.g. credit.request)"
-        value="credit.request"
-        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
+      <label class="block text-xs text-gray-500">
+        Events
+        <select id="wh-events"
+          multiple
+          class="mt-1 w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 min-h-28">
+        </select>
+      </label>
       <div class="flex gap-2">
         <button onclick="createWebhook()"
           class="bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-4 py-1.5 text-sm">Save</button>
-        <button onclick="document.getElementById('webhook-form').classList.add('hidden')"
+        <button onclick="hideWebhookForm()"
           class="bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg px-4 py-1.5 text-sm">Cancel</button>
       </div>
     </div>
@@ -120,7 +163,13 @@
 {% block scripts %}
 <script>
   const ROLE = '{{ user.role }}';
+  const USER_ID = {{ user.id | string | tojson }};
   const TOKEN_LIMITS = { normal: 1, pro: 5, admin: null };
+  const SLUG_RE = /^[a-z0-9]{3,32}$/;
+  let slugCheckTimer = null;
+  let lastSlugCheckAt = 0;
+  let lastSlugChecked = '';
+  const SLUG_CHECK_MIN_INTERVAL_MS = 500;
 
   async function api(path, opts = {}) {
     const r = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
@@ -129,11 +178,13 @@
   }
 
   async function loadBalance() {
+    const el = document.getElementById('balance');
+    if (!el) return;
     const r = await api('/credits');
     if (!r) return;
     if (r.ok) {
       const j = await r.json();
-      document.getElementById('balance').textContent = j.balance;
+      el.textContent = j.balance;
     }
   }
 
@@ -153,10 +204,9 @@
         </li>`).join('');
     }
     const msg = document.getElementById('token-limit-msg');
-    if (lim !== null) {
-      msg.textContent = `${tokens.length} / ${lim} token(s) used`;
-      msg.classList.remove('hidden');
-    }
+    const remaining = lim === null ? 'unlimited' : Math.max(lim - tokens.length, 0);
+    msg.textContent = `${tokens.length} created, ${remaining} remaining`;
+    msg.classList.remove('hidden');
   }
 
   async function loadSubdomains() {
@@ -168,11 +218,288 @@
       list.innerHTML = '<li class="text-gray-500">No subdomains yet.</li>';
     } else {
       list.innerHTML = subs.map(s => `
-        <li class="bg-gray-800 rounded-lg px-3 py-2">
-          <span class="font-mono">${s.slug}</span>
-          <span class="ml-2 text-gray-400 text-xs">${s.origin_host ? s.origin_host + ':' + s.origin_port : 'no origin'}</span>
+        <li class="bg-gray-800 rounded-lg px-3 py-3 space-y-3">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <span class="font-mono">${s.slug}</span>
+              <p id="origin-text-${s.slug}" class="text-gray-400 text-xs mt-1">${s.origin_host ? s.origin_host + ':' + s.origin_port : 'No origin configured'}</p>
+            </div>
+            <div class="flex items-center gap-3">
+              <button onclick="toggleOriginForm('${s.slug}')"
+                class="text-xs text-indigo-400 hover:text-indigo-300 whitespace-nowrap">
+                ${s.origin_host ? 'Edit origin' : 'Set origin'}
+              </button>
+              <button onclick="deleteSubdomain('${s.slug}')"
+                class="text-xs text-red-400 hover:text-red-300 whitespace-nowrap">
+                Delete
+              </button>
+            </div>
+          </div>
+          <div id="origin-form-${s.slug}" class="hidden space-y-2">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <input id="origin-host-${s.slug}" type="text" placeholder="Origin host"
+                class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
+              <input id="origin-port-${s.slug}" type="number" min="1" max="65535" placeholder="Origin port"
+                class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
+            </div>
+            <div class="flex gap-2">
+              <button onclick="saveOrigin('${s.slug}')"
+                class="bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-3 py-1.5 text-xs">Save origin</button>
+              <button onclick="hideOriginForm('${s.slug}')"
+                class="bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg px-3 py-1.5 text-xs">Cancel</button>
+            </div>
+          </div>
         </li>`).join('');
+      for (const s of subs) {
+        const hostInput = document.getElementById(`origin-host-${s.slug}`);
+        const portInput = document.getElementById(`origin-port-${s.slug}`);
+        if (hostInput) hostInput.value = s.origin_host || '';
+        if (portInput) portInput.value = s.origin_port || '';
+      }
     }
+  }
+
+  function showSubdomainForm() {
+    const msg = document.getElementById('subdomain-msg');
+    msg.classList.add('hidden');
+    msg.textContent = '';
+    document.getElementById('subdomain-form').classList.remove('hidden');
+    document.getElementById('subdomain-slug').focus();
+    updateSlugAvailability('neutral', 'Type a slug to check availability.');
+  }
+
+  function hideSubdomainForm() {
+    document.getElementById('subdomain-form').classList.add('hidden');
+    document.getElementById('subdomain-slug').value = '';
+    document.getElementById('subdomain-origin-host').value = '';
+    document.getElementById('subdomain-origin-port').value = '';
+    const panel = document.getElementById('slug-availability');
+    panel.classList.add('hidden');
+    if (slugCheckTimer) clearTimeout(slugCheckTimer);
+  }
+
+  function updateSlugAvailability(state, text) {
+    const panel = document.getElementById('slug-availability');
+    const icon = document.getElementById('slug-availability-icon');
+    const label = document.getElementById('slug-availability-text');
+    panel.classList.remove('hidden');
+    panel.classList.remove('border-green-700', 'border-red-700', 'border-gray-700', 'text-green-300', 'text-red-300', 'text-gray-300');
+    if (state === 'available') {
+      icon.innerHTML = '&#10003;';
+      panel.classList.add('border-green-700', 'text-green-300');
+    } else if (state === 'unavailable') {
+      icon.innerHTML = '&#10007;';
+      panel.classList.add('border-red-700', 'text-red-300');
+    } else if (state === 'loading') {
+      icon.textContent = '...';
+      panel.classList.add('border-gray-700', 'text-gray-300');
+    } else {
+      icon.textContent = '-';
+      panel.classList.add('border-gray-700', 'text-gray-300');
+    }
+    label.textContent = text;
+  }
+
+  async function checkSlugAvailability(slug, force = false) {
+    if (!SLUG_RE.test(slug)) {
+      updateSlugAvailability('unavailable', 'Invalid slug format.');
+      return { ok: false, available: false, detail: 'Invalid slug format.' };
+    }
+
+    const now = Date.now();
+    if (!force && slug === lastSlugChecked && now - lastSlugCheckAt < SLUG_CHECK_MIN_INTERVAL_MS) {
+      return { ok: true, available: true, skipped: true };
+    }
+
+    const waitMs = Math.max(0, SLUG_CHECK_MIN_INTERVAL_MS - (now - lastSlugCheckAt));
+    if (waitMs > 0 && !force) {
+      await new Promise(resolve => setTimeout(resolve, waitMs));
+    }
+
+    updateSlugAvailability('loading', `Checking '${slug}'...`);
+    const r = await fetch(`/subdomains/check?slug=${encodeURIComponent(slug)}`);
+    if (!r.ok) {
+      updateSlugAvailability('unavailable', 'Could not verify availability.');
+      return { ok: false, available: false, detail: 'Could not verify availability.' };
+    }
+
+    const j = await r.json();
+    lastSlugChecked = slug;
+    lastSlugCheckAt = Date.now();
+    if (j.available) {
+      updateSlugAvailability('available', `'${slug}' is available.`);
+      return { ok: true, available: true };
+    }
+
+    updateSlugAvailability('unavailable', `'${slug}' is taken.`);
+    return { ok: true, available: false, detail: 'Slug is already taken.' };
+  }
+
+  function onSubdomainSlugInput() {
+    const slug = document.getElementById('subdomain-slug').value.trim().toLowerCase();
+    if (slugCheckTimer) clearTimeout(slugCheckTimer);
+    if (!slug) {
+      const panel = document.getElementById('slug-availability');
+      panel.classList.add('hidden');
+      return;
+    }
+    slugCheckTimer = setTimeout(() => checkSlugAvailability(slug), 250);
+  }
+
+  function onSubdomainSlugBlur() {
+    const slug = document.getElementById('subdomain-slug').value.trim().toLowerCase();
+    if (!slug) return;
+    if (slugCheckTimer) clearTimeout(slugCheckTimer);
+    checkSlugAvailability(slug, true);
+  }
+
+  function showSubdomainMessage(text, type = 'error') {
+    const msg = document.getElementById('subdomain-msg');
+    msg.textContent = text;
+    msg.classList.remove('hidden', 'text-red-400', 'text-green-400');
+    msg.classList.add(type === 'success' ? 'text-green-400' : 'text-red-400');
+  }
+
+  async function responseError(r, fallback) {
+    try {
+      const body = await r.json();
+      if (typeof body.detail === 'string') return body.detail;
+      if (Array.isArray(body.detail) && body.detail.length && body.detail[0].msg) return body.detail[0].msg;
+      return fallback;
+    } catch (_) {
+      return fallback;
+    }
+  }
+
+  async function createSubdomain() {
+    const slugInput = document.getElementById('subdomain-slug');
+    const slug = slugInput.value.trim().toLowerCase();
+    const originHostInput = document.getElementById('subdomain-origin-host');
+    const originPortInput = document.getElementById('subdomain-origin-port');
+    const originHost = originHostInput.value.trim();
+    const originPortRaw = originPortInput.value.trim();
+    slugInput.value = slug;
+
+    if (!SLUG_RE.test(slug)) {
+      showSubdomainMessage('Use 3-32 lowercase letters or numbers only.');
+      return;
+    }
+    if ((originHost && !originPortRaw) || (!originHost && originPortRaw)) {
+      showSubdomainMessage('To set origin now, provide both host and port.');
+      return;
+    }
+    let originPort = null;
+    if (originHost && originPortRaw) {
+      originPort = parseInt(originPortRaw, 10);
+      if (!Number.isInteger(originPort) || originPort < 1 || originPort > 65535) {
+        showSubdomainMessage('Origin port must be between 1 and 65535.');
+        return;
+      }
+    }
+
+    const availability = await checkSlugAvailability(slug, true);
+    if (!availability.ok || !availability.available) {
+      showSubdomainMessage(availability.detail || `'${slug}' is not available.`);
+      return;
+    }
+
+    const r = await api('/subdomains/purchase', {
+      method: 'POST',
+      body: JSON.stringify({ user_id: USER_ID, slug })
+    });
+    if (!r) return;
+    if (!r.ok) {
+      const detail = await responseError(r, 'Could not purchase subdomain.');
+      showSubdomainMessage(detail);
+      return;
+    }
+
+    if (originHost && originPort !== null) {
+      const setResult = await setOrigin(slug, originHost, originPort);
+      if (!setResult.ok) {
+        hideSubdomainForm();
+        showSubdomainMessage(`Subdomain '${slug}' created, but origin failed: ${setResult.detail}`);
+        await Promise.all([loadSubdomains(), loadBalance()]);
+        return;
+      }
+      hideSubdomainForm();
+      showSubdomainMessage(`Subdomain '${slug}' created and origin set.`, 'success');
+      await Promise.all([loadSubdomains(), loadBalance()]);
+      return;
+    }
+
+    hideSubdomainForm();
+    showSubdomainMessage(`Subdomain '${slug}' created.`, 'success');
+    await Promise.all([loadSubdomains(), loadBalance()]);
+  }
+
+  function toggleOriginForm(slug) {
+    const form = document.getElementById(`origin-form-${slug}`);
+    if (!form) return;
+    const isHidden = form.classList.contains('hidden');
+    if (isHidden) {
+      form.classList.remove('hidden');
+      const host = document.getElementById(`origin-host-${slug}`);
+      if (host) host.focus();
+      return;
+    }
+    form.classList.add('hidden');
+  }
+
+  function hideOriginForm(slug) {
+    const form = document.getElementById(`origin-form-${slug}`);
+    if (form) form.classList.add('hidden');
+  }
+
+  async function setOrigin(slug, originHost, originPort) {
+    const r = await api(`/subdomains/${encodeURIComponent(slug)}/origin`, {
+      method: 'POST',
+      body: JSON.stringify({ origin_host: originHost, origin_port: originPort })
+    });
+    if (!r) return { ok: false, detail: 'Authentication required.' };
+    if (!r.ok) {
+      const detail = await responseError(r, 'Could not update origin.');
+      return { ok: false, detail };
+    }
+    return { ok: true };
+  }
+
+  async function saveOrigin(slug) {
+    const hostInput = document.getElementById(`origin-host-${slug}`);
+    const portInput = document.getElementById(`origin-port-${slug}`);
+    const originHost = hostInput.value.trim();
+    const portRaw = portInput.value.trim();
+    if (!originHost || !portRaw) {
+      showSubdomainMessage('Origin host and port are required.');
+      return;
+    }
+    const originPort = parseInt(portRaw, 10);
+    if (!Number.isInteger(originPort) || originPort < 1 || originPort > 65535) {
+      showSubdomainMessage('Origin port must be between 1 and 65535.');
+      return;
+    }
+
+    const setResult = await setOrigin(slug, originHost, originPort);
+    if (!setResult.ok) {
+      showSubdomainMessage(setResult.detail);
+      return;
+    }
+
+    hideOriginForm(slug);
+    showSubdomainMessage(`Origin updated for '${slug}'.`, 'success');
+    await loadSubdomains();
+  }
+
+  async function deleteSubdomain(slug) {
+    if (!confirm(`Delete subdomain '${slug}'?`)) return;
+    const r = await api(`/subdomains/${encodeURIComponent(slug)}`, { method: 'DELETE' });
+    if (!r) return;
+    if (!r.ok && r.status !== 204) {
+      showSubdomainMessage(await responseError(r, 'Could not delete subdomain.'));
+      return;
+    }
+    showSubdomainMessage(`Subdomain '${slug}' deleted.`, 'success');
+    await Promise.all([loadSubdomains(), loadBalance()]);
   }
 
   async function loadWebhooks() {
@@ -185,10 +512,30 @@
       list.innerHTML = '<li class="text-gray-500">No webhooks yet.</li>';
     } else {
       list.innerHTML = hooks.map(h => `
-        <li class="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2">
-          <span class="font-mono text-xs truncate">${h.url}</span>
+        <li class="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2 gap-3">
+          <div class="min-w-0">
+            <p class="font-mono text-xs truncate">${h.url}</p>
+            <p class="text-[11px] text-gray-400 mt-1">
+              ref: <span class="font-mono">${h.reference || 'none'}</span>
+              <span class="mx-2">|</span>
+              events: ${h.events.join(', ')}
+            </p>
+          </div>
           <button onclick="deleteWebhook('${h.id}')" class="text-red-400 hover:text-red-300 text-xs ml-4">Delete</button>
         </li>`).join('');
+    }
+  }
+
+  async function loadWebhookEvents() {
+    if (!['pro', 'admin'].includes(ROLE)) return;
+    const r = await api('/webhooks/events');
+    if (!r) return;
+    if (!r.ok) return;
+    const events = await r.json();
+    const select = document.getElementById('wh-events');
+    select.innerHTML = events.map(e => `<option value="${e.key}">${e.label}${e.admin_only ? ' (admin only)' : ''}</option>`).join('');
+    if (events.length > 0) {
+      select.options[0].selected = true;
     }
   }
 
@@ -225,16 +572,38 @@
 
   function showWebhookForm() {
     document.getElementById('webhook-form').classList.remove('hidden');
+    if (!document.getElementById('wh-events').options.length) {
+      loadWebhookEvents();
+    }
     document.getElementById('wh-url').focus();
   }
 
-  async function createWebhook() {
-    const url = document.getElementById('wh-url').value.trim();
-    const events = document.getElementById('wh-events').value.split(',').map(e => e.trim()).filter(Boolean);
-    if (!url) return;
-    const r = await api('/webhooks', { method: 'POST', body: JSON.stringify({ url, events, active: true }) });
-    if (!r) return;
+  function hideWebhookForm() {
     document.getElementById('webhook-form').classList.add('hidden');
+    document.getElementById('wh-reference').value = '';
+    document.getElementById('wh-url').value = '';
+  }
+
+  async function createWebhook() {
+    const reference = document.getElementById('wh-reference').value.trim();
+    const url = document.getElementById('wh-url').value.trim();
+    const eventsSelect = document.getElementById('wh-events');
+    const events = Array.from(eventsSelect.selectedOptions).map(opt => opt.value);
+    if (!url) return;
+    if (!events.length) {
+      alert('Select at least one event.');
+      return;
+    }
+    const payload = { url, events, active: true };
+    if (reference) payload.reference = reference;
+
+    const r = await api('/webhooks', { method: 'POST', body: JSON.stringify(payload) });
+    if (!r) return;
+    if (!r.ok) {
+      alert(await responseError(r, 'Could not create webhook.'));
+      return;
+    }
+    hideWebhookForm();
     loadWebhooks();
   }
 
@@ -245,6 +614,7 @@
   }
 
   async function requestCredits() {
+    if (ROLE === 'admin') return;
     const amountStr = prompt('How many credits are you requesting?');
     if (amountStr === null) return;
     const amount = parseInt(amountStr, 10);
@@ -253,7 +623,7 @@
     if (msg === null) return;
     const r = await api('/credits/request', {
       method: 'POST',
-      body: JSON.stringify({ user_id: {{ user.id | string | tojson }}, amount: amount, message: msg || null })
+      body: JSON.stringify({ user_id: USER_ID, amount: amount, message: msg || null })
     });
     if (r && r.ok) alert('Request sent!');
   }
@@ -261,6 +631,7 @@
   loadBalance();
   loadTokens();
   loadSubdomains();
+  loadWebhookEvents();
   loadWebhooks();
 </script>
 {% endblock %}

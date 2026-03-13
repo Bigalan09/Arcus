@@ -57,3 +57,16 @@ async def test_grant_credits_negative_amount(client, admin_headers):
     user_id = await _create_user(client, admin_headers)
     resp = await client.post("/credits/grant", json={"user_id": user_id, "amount": -3}, headers=admin_headers)
     assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_grant_credits_to_admin_rejected(client, admin_headers):
+    """Admin accounts do not accept credits."""
+    me = await client.get("/auth/me", headers=admin_headers)
+    assert me.status_code == 200
+    resp = await client.post(
+        "/credits/grant",
+        json={"user_id": me.json()["id"], "amount": 5},
+        headers=admin_headers,
+    )
+    assert resp.status_code == 400

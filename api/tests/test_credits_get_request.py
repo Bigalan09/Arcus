@@ -62,75 +62,96 @@ async def test_get_credits_after_multiple_grants(client, admin_headers):
     assert resp.json()["balance"] == 7
 
 
+@pytest.mark.asyncio
+async def test_get_credits_admin_account_rejected(client, admin_headers):
+    """GET /credits is not available for admin accounts."""
+    resp = await client.get("/credits", headers=admin_headers)
+    assert resp.status_code == 400
+
+
 # ---------------------------------------------------------------------------
 # POST /credits/request
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_request_credits_success_no_webhooks(client, admin_headers):
-    """POST /credits/request returns 202; zero webhooks fired when none registered."""
-    user_id = await _create_user(client, admin_headers, "requser@example.com")
-
-    # Admin can request credits on behalf of any user
-    resp = await client.post("/credits/request", json={"user_id": user_id, "amount": 5}, headers=admin_headers)
+async def test_request_credits_success_no_webhooks(client, normal_user):
+    """POST /credits/request returns 202 for a normal user requesting their own credits."""
+    resp = await client.post(
+        "/credits/request",
+        json={"user_id": normal_user["id"], "amount": 5},
+        headers=normal_user["headers"],
+    )
     assert resp.status_code == 202
     data = resp.json()
-    assert data["user_id"] == user_id
+    assert data["user_id"] == normal_user["id"]
     assert data["webhooks_fired"] == 0
 
 
 @pytest.mark.asyncio
-async def test_request_credits_with_message(client, admin_headers):
+async def test_request_credits_with_message(client, normal_user):
     """POST /credits/request accepts an optional message field."""
-    user_id = await _create_user(client, admin_headers, "reqmsg@example.com")
-
     resp = await client.post(
         "/credits/request",
-        json={"user_id": user_id, "amount": 3, "message": "Need credits for project X"},
-        headers=admin_headers,
+        json={"user_id": normal_user["id"], "amount": 3, "message": "Need credits for project X"},
+        headers=normal_user["headers"],
     )
     assert resp.status_code == 202
-    assert resp.json()["user_id"] == user_id
+    assert resp.json()["user_id"] == normal_user["id"]
 
 
 @pytest.mark.asyncio
-async def test_request_credits_unknown_user(client, admin_headers):
+async def test_request_credits_unknown_user(client, normal_user):
     """POST /credits/request for a non-existent user returns 404."""
-    resp = await client.post("/credits/request", json={"user_id": str(uuid.uuid4()), "amount": 1}, headers=admin_headers)
-    assert resp.status_code == 404
+    resp = await client.post(
+        "/credits/request",
+        json={"user_id": str(uuid.uuid4()), "amount": 1},
+        headers=normal_user["headers"],
+    )
+    assert resp.status_code == 403
 
 
 @pytest.mark.asyncio
-async def test_request_credits_message_too_long(client, admin_headers):
+async def test_request_credits_message_too_long(client, normal_user):
     """POST /credits/request with a message over 500 chars returns 422."""
-    user_id = await _create_user(client, admin_headers, "longmsg@example.com")
     resp = await client.post(
         "/credits/request",
-        json={"user_id": user_id, "amount": 1, "message": "x" * 501},
-        headers=admin_headers,
+        json={"user_id": normal_user["id"], "amount": 1, "message": "x" * 501},
+        headers=normal_user["headers"],
     )
     assert resp.status_code == 422
 
 
 @pytest.mark.asyncio
-async def test_request_credits_missing_amount(client, admin_headers):
+async def test_request_credits_missing_amount(client, normal_user):
     """POST /credits/request without amount returns 422."""
-    user_id = await _create_user(client, admin_headers, "noamount@example.com")
     resp = await client.post(
         "/credits/request",
-        json={"user_id": user_id},
-        headers=admin_headers,
+        json={"user_id": normal_user["id"]},
+        headers=normal_user["headers"],
     )
     assert resp.status_code == 422
 
 
 @pytest.mark.asyncio
-async def test_request_credits_zero_amount(client, admin_headers):
+async def test_request_credits_zero_amount(client, normal_user):
     """POST /credits/request with amount=0 returns 422."""
-    user_id = await _create_user(client, admin_headers, "zeroamt@example.com")
     resp = await client.post(
         "/credits/request",
-        json={"user_id": user_id, "amount": 0},
-        headers=admin_headers,
+        json={"user_id": normal_user["id"], "amount": 0},
+        headers=normal_user["headers"],
     )
     assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_admin_cannot_request_credits(client, admin_headers):
+    """POST /credits/request is blocked for admin accounts."""
+    me = await client.get("/auth/me", headers=admin_headers)
+    assert me.status_code == 200
+    admin_id = me.json()["id"]
+    resp = await client.post(
+        "/credits/request",
+        json={"user_id": admin_id, "amount": 2},
+        headers=admin_headers,
+    )
+    assert resp.status_code == 400

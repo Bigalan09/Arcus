@@ -27,10 +27,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.database import get_db
-from api.models import Blocklist, Credit, User
+from api.models import Blocklist, Credit, User, Webhook
 from api.schemas import (
     AdminUserCreate,
     AdminUserResponse,
+    AdminUserUpdate,
     BlocklistAddRequest,
     BlocklistEntry,
     BlocklistImportResult,
@@ -38,6 +39,7 @@ from api.schemas import (
 from api.utils.auth import generate_temp_password, hash_password
 from api.utils.deps import require_admin
 from api.utils.email import send_password_reset_email, send_welcome_email
+from api.utils.webhooks import fire_webhooks
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -46,6 +48,13 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 # ---------------------------------------------------------------------------
 # User management
 # ---------------------------------------------------------------------------
+
+
+def _parse_uuid(value: str, detail: str = "Invalid user ID.") -> _uuid.UUID:
+    try:
+        return _uuid.UUID(value)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail) from None
 
 
 @router.get("/users", response_model=list[AdminUserResponse])
@@ -89,7 +98,8 @@ async def create_user_admin(
     db.add(user)
     try:
         await db.flush()
-        db.add(Credit(user_id=user.id, balance=0))
+        if payload.role != "admin":
+            db.add(Credit(user_id=user.id, balance=0))
         await db.commit()
         await db.refresh(user)
     except IntegrityError:
@@ -101,7 +111,110 @@ async def create_user_admin(
 
     logger.info("Admin %s created user %s (role=%s)", admin.id, user.email, user.role)
     background_tasks.add_task(send_welcome_email, user.email, temp_password)
+    result = await db.execute(select(Webhook).where(Webhook.active.is_(True)))
+    webhooks = result.scalars().all()
+    await fire_webhooks(
+        webhooks,
+        "user.created",
+        {"user_id": str(user.id), "email": user.email, "role": user.role},
+    )
     return user
+
+
+@router.get("/users/{user_id}", response_model=AdminUserResponse)
+async def get_user_admin(
+    user_id: str,
+    _: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return a single user account by ID."""
+    uid = _parse_uuid(user_id)
+    user = await db.get(User, uid)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    return user
+
+
+@router.patch("/users/{user_id}", response_model=AdminUserResponse)
+async def update_user_admin(
+    user_id: str,
+    payload: AdminUserUpdate,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update mutable user fields (role, active)."""
+    uid = _parse_uuid(user_id)
+    user = await db.get(User, uid)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+
+    if payload.role is not None and payload.role != user.role:
+        if payload.role == "admin":
+            result = await db.execute(
+                select(func.count()).select_from(User).where(User.role == "admin", User.id != user.id)
+            )
+            if result.scalar_one() > 0:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="An admin user already exists. Only one admin is permitted.",
+                )
+        if user.role == "admin" and payload.role != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You cannot demote the only admin account.",
+            )
+        user.role = payload.role
+
+    if payload.active is not None and payload.active != user.active:
+        if user.id == admin.id and payload.active is False:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You cannot deactivate your own account.",
+            )
+        if user.role == "admin" and payload.active is False:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You cannot deactivate the admin account.",
+            )
+        user.active = payload.active
+
+    if payload.role == "admin":
+        result = await db.execute(select(Credit).where(Credit.user_id == user.id))
+        credit = result.scalar_one_or_none()
+        if credit is not None:
+            await db.delete(credit)
+
+    if payload.role is not None and payload.role != "admin":
+        result = await db.execute(select(Credit).where(Credit.user_id == user.id))
+        credit = result.scalar_one_or_none()
+        if credit is None:
+            db.add(Credit(user_id=user.id, balance=0))
+
+    await db.commit()
+    await db.refresh(user)
+    logger.info("Admin %s updated user %s (role=%s, active=%s)", admin.id, user.id, user.role, user.active)
+    return user
+
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user_admin(
+    user_id: str,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a user account."""
+    uid = _parse_uuid(user_id)
+    user = await db.get(User, uid)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    if user.id == admin.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot delete your own account.")
+    if user.role == "admin":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot delete the admin account.")
+
+    await db.delete(user)
+    await db.commit()
+    logger.info("Admin %s deleted user %s", admin.id, uid)
 
 
 @router.post("/users/{user_id}/reset-password", status_code=status.HTTP_204_NO_CONTENT)
@@ -112,11 +225,7 @@ async def reset_user_password(
     db: AsyncSession = Depends(get_db),
 ):
     """Reset a user's password: generate a new temp password and email it (non-blocking)."""
-    try:
-        uid = _uuid.UUID(user_id)
-    except ValueError:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid user ID.") from None
-
+    uid = _parse_uuid(user_id)
     user = await db.get(User, uid)
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")

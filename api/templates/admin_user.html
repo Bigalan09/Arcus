@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+{% block title %}Manage User – Arcus{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="flex items-center justify-between">
+    <h1 class="text-2xl font-semibold">Manage user</h1>
+    <a href="/admin"
+       class="text-sm text-gray-400 hover:text-white border border-gray-700 rounded-lg px-3 py-1.5">
+      Back to admin
+    </a>
+  </div>
+
+  <section class="bg-gray-900 rounded-xl p-5 border border-gray-800 space-y-4">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <p id="user-email" class="text-lg font-medium break-all">{{ target_user.email }}</p>
+        <p class="text-xs text-gray-500 mt-1">
+          Joined <span id="user-joined">{{ target_user.created_at }}</span>
+        </p>
+      </div>
+      <span id="user-status" class="text-xs px-2 py-1 rounded-full"></span>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <label class="text-sm text-gray-300">
+        Role
+        <select id="user-role"
+          class="mt-1 w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
+          <option value="normal">Normal</option>
+          <option value="pro">Pro</option>
+          <option value="admin">Admin</option>
+        </select>
+      </label>
+      <label class="text-sm text-gray-300 flex items-center gap-2 mt-6 sm:mt-0">
+        <input id="user-active" type="checkbox" class="h-4 w-4 rounded border-gray-600 bg-gray-800 text-indigo-600">
+        Active account
+      </label>
+    </div>
+
+    <p id="user-note" class="text-xs text-gray-500 hidden"></p>
+    <p id="user-msg" class="text-sm hidden"></p>
+
+    <div class="flex flex-wrap items-center gap-3">
+      <button onclick="saveUser()"
+        class="bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-4 py-2 text-sm">
+        Save changes
+      </button>
+      <button onclick="resetPassword()"
+        class="bg-yellow-700 hover:bg-yellow-600 text-yellow-100 rounded-lg px-4 py-2 text-sm">
+        Reset password
+      </button>
+      <button id="toggle-active-btn" onclick="toggleActive()"
+        class="bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg px-4 py-2 text-sm">
+        Deactivate user
+      </button>
+      <button id="delete-user-btn" onclick="deleteUser()"
+        class="bg-red-800 hover:bg-red-700 text-red-100 rounded-lg px-4 py-2 text-sm">
+        Delete user
+      </button>
+    </div>
+  </section>
+
+  <section id="credits-section" class="bg-gray-900 rounded-xl p-5 border border-gray-800 space-y-3">
+    <div class="flex items-center justify-between">
+      <h2 class="font-medium">Credits</h2>
+      <button onclick="grantCredits()"
+        class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-3 py-1.5">
+        Grant credits
+      </button>
+    </div>
+    <p class="text-3xl font-bold" id="credits-balance">–</p>
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const TARGET_USER_ID = {{ target_user.id | string | tojson }};
+  const CURRENT_ADMIN_ID = {{ user.id | string | tojson }};
+  let currentRole = {{ target_user.role | tojson }};
+  let currentActive = {{ target_user.active | tojson }};
+
+  function showMessage(text, type = 'error') {
+    const el = document.getElementById('user-msg');
+    el.textContent = text;
+    el.classList.remove('hidden', 'text-red-400', 'text-green-400');
+    el.classList.add(type === 'success' ? 'text-green-400' : 'text-red-400');
+  }
+
+  async function api(path, opts = {}) {
+    const r = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+    if (r.status === 401) { window.location.href = '/login'; return null; }
+    if (r.status === 403) { window.location.href = '/dashboard'; return null; }
+    return r;
+  }
+
+  async function responseError(r, fallback) {
+    try {
+      const body = await r.json();
+      if (typeof body.detail === 'string') return body.detail;
+      if (Array.isArray(body.detail) && body.detail.length && body.detail[0].msg) return body.detail[0].msg;
+      return fallback;
+    } catch (_) {
+      return fallback;
+    }
+  }
+
+  function applyUserState(user) {
+    currentRole = user.role;
+    currentActive = user.active;
+    document.getElementById('user-email').textContent = user.email;
+    document.getElementById('user-role').value = user.role;
+    document.getElementById('user-active').checked = user.active;
+    document.getElementById('user-joined').textContent = new Date(user.created_at).toLocaleDateString();
+
+    const status = document.getElementById('user-status');
+    status.textContent = user.active ? 'active' : 'inactive';
+    status.className = `text-xs px-2 py-1 rounded-full ${user.active ? 'bg-green-900/60 text-green-300' : 'bg-gray-800 text-gray-400'}`;
+
+    const note = document.getElementById('user-note');
+    const isSelf = TARGET_USER_ID === CURRENT_ADMIN_ID;
+    const isAdminTarget = user.role === 'admin';
+    note.classList.add('hidden');
+
+    const activeInput = document.getElementById('user-active');
+    const toggleBtn = document.getElementById('toggle-active-btn');
+    const deleteBtn = document.getElementById('delete-user-btn');
+
+    if (isSelf || isAdminTarget) {
+      activeInput.disabled = true;
+      toggleBtn.disabled = true;
+      toggleBtn.classList.add('opacity-50', 'cursor-not-allowed');
+      if (isSelf) {
+        deleteBtn.disabled = true;
+        deleteBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        note.textContent = 'You cannot deactivate or delete your own account.';
+      } else {
+        note.textContent = 'Admin account cannot be deactivated or deleted.';
+      }
+      note.classList.remove('hidden');
+    } else {
+      activeInput.disabled = false;
+      toggleBtn.disabled = false;
+      toggleBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+      deleteBtn.disabled = false;
+      deleteBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+
+    toggleBtn.textContent = user.active ? 'Deactivate user' : 'Reactivate user';
+
+    const creditsSection = document.getElementById('credits-section');
+    if (user.role === 'admin') {
+      creditsSection.classList.add('hidden');
+    } else {
+      creditsSection.classList.remove('hidden');
+    }
+  }
+
+  async function loadUser() {
+    const r = await api(`/admin/users/${TARGET_USER_ID}`);
+    if (!r) return;
+    if (!r.ok) {
+      showMessage(await responseError(r, 'Failed to load user.'));
+      return;
+    }
+    const user = await r.json();
+    applyUserState(user);
+    if (user.role !== 'admin') await loadCredits();
+  }
+
+  async function loadCredits() {
+    const r = await api(`/credits?user_id=${TARGET_USER_ID}`);
+    if (!r) return;
+    if (!r.ok) {
+      document.getElementById('credits-balance').textContent = '–';
+      return;
+    }
+    const j = await r.json();
+    document.getElementById('credits-balance').textContent = j.balance;
+  }
+
+  async function saveUser() {
+    const role = document.getElementById('user-role').value;
+    const active = document.getElementById('user-active').checked;
+    const r = await api(`/admin/users/${TARGET_USER_ID}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role, active })
+    });
+    if (!r) return;
+    if (!r.ok) {
+      showMessage(await responseError(r, 'Failed to save user changes.'));
+      return;
+    }
+    showMessage('User updated.', 'success');
+    await loadUser();
+  }
+
+  async function toggleActive() {
+    const r = await api(`/admin/users/${TARGET_USER_ID}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ active: !currentActive })
+    });
+    if (!r) return;
+    if (!r.ok) {
+      showMessage(await responseError(r, 'Failed to update active state.'));
+      return;
+    }
+    showMessage('User status updated.', 'success');
+    await loadUser();
+  }
+
+  async function resetPassword() {
+    if (!confirm('Reset password and email a new temporary password?')) return;
+    const r = await api(`/admin/users/${TARGET_USER_ID}/reset-password`, { method: 'POST' });
+    if (!r) return;
+    if (!(r.ok || r.status === 204)) {
+      showMessage(await responseError(r, 'Failed to reset password.'));
+      return;
+    }
+    showMessage('Password reset email sent.', 'success');
+  }
+
+  async function grantCredits() {
+    const amountStr = prompt('How many credits to grant?');
+    if (amountStr === null) return;
+    const amount = parseInt(amountStr, 10);
+    if (!amount || amount <= 0) {
+      showMessage('Enter a positive number of credits.');
+      return;
+    }
+    const r = await api('/credits/grant', {
+      method: 'POST',
+      body: JSON.stringify({ user_id: TARGET_USER_ID, amount })
+    });
+    if (!r) return;
+    if (!r.ok) {
+      showMessage(await responseError(r, 'Failed to grant credits.'));
+      return;
+    }
+    showMessage('Credits granted.', 'success');
+    await loadCredits();
+  }
+
+  async function deleteUser() {
+    if (TARGET_USER_ID === CURRENT_ADMIN_ID) {
+      showMessage('You cannot delete your own account.');
+      return;
+    }
+    const email = document.getElementById('user-email').textContent;
+    if (!confirm(`Delete ${email}? This cannot be undone.`)) return;
+    const r = await api(`/admin/users/${TARGET_USER_ID}`, { method: 'DELETE' });
+    if (!r) return;
+    if (!(r.ok || r.status === 204)) {
+      showMessage(await responseError(r, 'Failed to delete user.'));
+      return;
+    }
+    window.location.href = '/admin';
+  }
+
+  loadUser();
+</script>
+{% endblock %}
