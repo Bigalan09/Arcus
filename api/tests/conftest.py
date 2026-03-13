@@ -62,13 +62,13 @@ async def client():
 # ---------------------------------------------------------------------------
 
 ADMIN_EMAIL = "admin@test.arcus"
-ADMIN_PASSWORD = "TestAdmin1!"
+ADMIN_PASSWORD = "testadmin12"
 
 PRO_EMAIL = "pro@test.arcus"
-PRO_PASSWORD = "TestPro1!"
+PRO_PASSWORD = "testpro1234"
 
 NORMAL_EMAIL = "normal@test.arcus"
-NORMAL_PASSWORD = "TestNormal1!"
+NORMAL_PASSWORD = "testnorm12"
 
 
 @pytest_asyncio.fixture

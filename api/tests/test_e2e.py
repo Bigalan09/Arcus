@@ -43,11 +43,11 @@ from api.utils.auth import hash_password
 # ---------------------------------------------------------------------------
 
 ADMIN_EMAIL = "e2e-admin@arcus.example.com"
-ADMIN_PASSWORD = "AdminPass1!"
+ADMIN_PASSWORD = "testadmin12"
 NORMAL_EMAIL = "e2e-normal@arcus.example.com"
-NORMAL_PASSWORD = "NormalPass1!"
+NORMAL_PASSWORD = "testnorm12"
 PRO_EMAIL = "e2e-pro@arcus.example.com"
-PRO_PASSWORD = "ProPass1!"
+PRO_PASSWORD = "testpro1234"
 
 
 async def _setup_admin(client):
@@ -70,7 +70,7 @@ async def _create_user_with_password(
     admin_headers: dict,
     email: str,
     role: str = "normal",
-    password: str = "UserPass1!",
+    password: str = "testuser12",
 ) -> dict:
     """Create a user via /admin/users and inject a known password directly.
 
@@ -1054,7 +1054,7 @@ async def test_must_change_password_flag_cleared_after_change(client):
 
     # Set a known password directly and simulate initial login
     user_id = resp.json()["id"]
-    initial_password = "InitialPass1!"
+    initial_password = "initialpwd1"
     async with TestSessionLocal() as session:
         result = await session.execute(select(User).where(User.id == uuid.UUID(user_id)))
         u = result.scalar_one()
@@ -1069,7 +1069,7 @@ async def test_must_change_password_flag_cleared_after_change(client):
     token_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
 
     # Change password
-    new_password = "NewSecurePass2!"
+    new_password = "newpasswd99"
     r = await client.post(
         "/auth/change-password",
         json={"current_password": initial_password, "new_password": new_password},
