@@ -60,6 +60,16 @@ class Subdomain(Base):
     slug: Mapped[str] = mapped_column(Text, nullable=False)
     origin_host: Mapped[str | None] = mapped_column(Text, nullable=True)
     origin_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    origin_health_status: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="unknown",
+        server_default="unknown",
+    )
+    origin_health_checked_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    origin_health_status_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    origin_health_latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    origin_health_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
 

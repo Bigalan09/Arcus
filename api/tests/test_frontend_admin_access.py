@@ -87,3 +87,12 @@ async def test_normal_dashboard_hides_content_filter_bypass_toggle(client, norma
 
     assert resp.status_code == 200
     assert "Ignore content filters" not in resp.text
+
+
+@pytest.mark.asyncio
+async def test_dashboard_includes_origin_health_controls(client, normal_user):
+    resp = await client.get("/dashboard", headers=normal_user["headers"])
+
+    assert resp.status_code == 200
+    assert "Check origin" in resp.text
+    assert "Origin health" in resp.text

@@ -14,12 +14,21 @@ from api.models import Credit, Subdomain, User, Webhook
 from api.schemas import OriginSet, SubdomainCheckResponse, SubdomainPurchase, SubdomainResponse
 from api.utils.cloudflare import create_dns_record
 from api.utils.deps import get_current_user, get_current_user_optional
+from api.utils.origin_health import OriginHealthSnapshot, probe_origin
 from api.utils.slug_policy import assess_slug_with_options
 from api.utils.validation import validate_origin_host
 from api.utils.webhooks import fire_webhooks
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/subdomains", tags=["subdomains"])
+
+
+def _apply_origin_health_snapshot(subdomain: Subdomain, snapshot: OriginHealthSnapshot) -> None:
+    subdomain.origin_health_status = snapshot.status
+    subdomain.origin_health_checked_at = snapshot.checked_at
+    subdomain.origin_health_status_code = snapshot.status_code
+    subdomain.origin_health_latency_ms = snapshot.latency_ms
+    subdomain.origin_health_error = snapshot.error
 
 
 @router.post("/purchase", response_model=SubdomainResponse, status_code=status.HTTP_201_CREATED)
@@ -132,6 +141,8 @@ async def set_origin(
 
     subdomain.origin_host = validated_host
     subdomain.origin_port = payload.origin_port
+    snapshot = await probe_origin(validated_host, payload.origin_port)
+    _apply_origin_health_snapshot(subdomain, snapshot)
     await db.commit()
     await db.refresh(subdomain)
     logger.info("Origin set for '%s.%s': %s:%d", slug, actual_domain, validated_host, payload.origin_port)
@@ -149,6 +160,40 @@ async def set_origin(
             "origin_port": subdomain.origin_port,
         },
     )
+    return subdomain
+
+
+@router.post("/{slug}/origin/check", response_model=SubdomainResponse)
+async def check_origin(
+    slug: str,
+    domain: str | None = Query(None, description="Domain the subdomain belongs to (defaults to primary)"),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Re-check the saved origin server for a subdomain."""
+    actual_domain = domain or settings.primary_domain
+    result = await db.execute(select(Subdomain).where(Subdomain.slug == slug, Subdomain.domain == actual_domain))
+    subdomain = result.scalar_one_or_none()
+    if subdomain is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subdomain not found.")
+
+    if user.role != "admin" and subdomain.user_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only modify your own subdomains.",
+        )
+
+    if not subdomain.origin_host or subdomain.origin_port is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No origin is configured for this subdomain.",
+        )
+
+    snapshot = await probe_origin(subdomain.origin_host, subdomain.origin_port)
+    _apply_origin_health_snapshot(subdomain, snapshot)
+    await db.commit()
+    await db.refresh(subdomain)
+    logger.info("Origin health checked for '%s.%s'", slug, actual_domain)
     return subdomain
 
 
