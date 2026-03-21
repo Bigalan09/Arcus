@@ -16,3 +16,4 @@ venv/
 letsencrypt/
 node_modules/
 package-lock.json
+.worktrees/

@@ -552,7 +552,60 @@
     });
     if (!r) return { ok: false, detail: 'Authentication required.' };
     if (!r.ok) return { ok: false, detail: await ui.parseApiError(r, 'Could not update origin.') };
-    return { ok: true };
+    return { ok: true, subdomain: await r.json() };
+  }
+
+  function formatOriginHealthSummary(subdomain) {
+    const status = subdomain.origin_health_status || 'unknown';
+    const checkedAt = subdomain.origin_health_checked_at
+      ? new Date(subdomain.origin_health_checked_at).toLocaleString()
+      : null;
+
+    if (status === 'healthy') {
+      const parts = ['Healthy'];
+      if (subdomain.origin_health_status_code !== null && subdomain.origin_health_status_code !== undefined) {
+        parts.push(`HTTP ${subdomain.origin_health_status_code}`);
+      }
+      if (subdomain.origin_health_latency_ms !== null && subdomain.origin_health_latency_ms !== undefined) {
+        parts.push(`${subdomain.origin_health_latency_ms} ms`);
+      }
+      if (checkedAt) parts.push(`Checked ${checkedAt}`);
+      return { tone: 'text-green-300', text: parts.join(' · ') };
+    }
+
+    if (status === 'unreachable') {
+      const parts = ['Unreachable'];
+      if (subdomain.origin_health_error) parts.push(subdomain.origin_health_error);
+      if (checkedAt) parts.push(`Checked ${checkedAt}`);
+      return { tone: 'text-red-300', text: parts.join(' · ') };
+    }
+
+    return {
+      tone: 'text-gray-400',
+      text: 'Unknown · Run Check origin after saving an upstream target.',
+    };
+  }
+
+  async function checkOrigin(slug, domain, button) {
+    ui.setButtonBusy(button, true, 'Checking...');
+    try {
+      const params = domain ? `?domain=${encodeURIComponent(domain)}` : '';
+      const r = await api(`/subdomains/${encodeURIComponent(slug)}/origin/check${params}`, {
+        method: 'POST'
+      });
+      if (!r) return;
+      if (!r.ok) {
+        setAlert('subdomain-msg', await ui.parseApiError(r, 'Could not check origin.'), 'error');
+        return;
+      }
+
+      const updated = await r.json();
+      const health = formatOriginHealthSummary(updated);
+      setAlert('subdomain-msg', `Origin checked for '${slug}.${domain}': ${health.text}`, updated.origin_health_status === 'healthy' ? 'success' : 'warning');
+      await loadSubdomains();
+    } finally {
+      ui.setButtonBusy(button, false);
+    }
   }
 
   async function createSubdomain() {
@@ -619,6 +672,17 @@
           await Promise.all([loadSubdomains(), loadBalance()]);
           return;
         }
+
+        if (originResult.subdomain.origin_health_status === 'unreachable') {
+          hideSubdomainForm();
+          setAlert(
+            'subdomain-msg',
+            `Subdomain '${fullName}' created. Origin saved, but the last check failed: ${originResult.subdomain.origin_health_error || 'Unreachable.'}`,
+            'warning'
+          );
+          await Promise.all([loadSubdomains(), loadBalance()]);
+          return;
+        }
       }
 
       hideSubdomainForm();
@@ -648,16 +712,22 @@
       const id = escapeHtml(s.id);
       const fullName = escapeHtml(`${s.slug}.${s.domain}`);
       const originText = s.origin_host ? `${escapeHtml(s.origin_host)}:${escapeHtml(s.origin_port)}` : 'No origin configured';
+      const originHealth = formatOriginHealthSummary(s);
       const originButtonLabel = s.origin_host ? 'Edit origin' : 'Set origin';
+      const checkOriginButton = s.origin_host
+        ? `<button type="button" onclick="checkOrigin('${escapeHtml(s.slug)}', '${escapeHtml(s.domain)}', this)" class="app-btn app-btn-subtle text-xs px-3 py-1.5">Check origin</button>`
+        : '';
       return `
         <li class="app-card-muted px-3 py-3 space-y-3">
           <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
             <div>
               <p class="font-mono text-base">${fullName}</p>
               <p class="app-help mt-1" id="origin-text-${id}">${originText}</p>
+              <p class="app-help mt-1" id="origin-health-${id}">Origin health: <span class="${originHealth.tone}">${escapeHtml(originHealth.text)}</span></p>
             </div>
             <div class="flex items-center gap-3">
               <button type="button" onclick="toggleOriginForm('${id}')" class="app-btn app-btn-subtle text-xs px-3 py-1.5">${originButtonLabel}</button>
+              ${checkOriginButton}
               <button type="button" onclick="deleteSubdomain('${escapeHtml(s.slug)}', '${escapeHtml(s.domain)}', this)" class="app-btn app-btn-danger text-xs px-3 py-1.5">Delete</button>
             </div>
           </div>
@@ -733,7 +803,11 @@
       }
 
       hideOriginForm(id);
-      setAlert('subdomain-msg', `Origin updated for '${slug}.${domain}'.`, 'success');
+      const alertType = result.subdomain.origin_health_status === 'healthy' ? 'success' : 'warning';
+      const alertText = result.subdomain.origin_health_status === 'healthy'
+        ? `Origin updated for '${slug}.${domain}'.`
+        : `Origin updated for '${slug}.${domain}', but the last check failed: ${result.subdomain.origin_health_error || 'Unreachable.'}`;
+      setAlert('subdomain-msg', alertText, alertType);
       await loadSubdomains();
     } finally {
       ui.setButtonBusy(button, false);

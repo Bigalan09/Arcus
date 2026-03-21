@@ -1,6 +1,7 @@
 """Tests for subdomain routes."""
 
-from unittest.mock import patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -188,6 +189,165 @@ async def test_set_origin_unknown_slug(client, admin_headers):
         headers=admin_headers,
     )
     assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_set_origin_returns_origin_health_snapshot(client, admin_headers):
+    """Saving an origin should return the latest stored health snapshot."""
+    from api.utils.origin_health import OriginHealthSnapshot
+
+    user_id = await _setup_user_with_credits(client, admin_headers, "healthsave@example.com")
+    await client.post("/subdomains/purchase", json={"user_id": user_id, "slug": "healthsave"}, headers=admin_headers)
+
+    snapshot = OriginHealthSnapshot(
+        status="healthy",
+        checked_at=datetime(2026, 3, 15, 11, 30, tzinfo=UTC),
+        status_code=302,
+        latency_ms=87,
+        error=None,
+    )
+
+    with patch("api.routes.subdomains.probe_origin", AsyncMock(return_value=snapshot)):
+        resp = await client.post(
+            "/subdomains/healthsave/origin",
+            json={"origin_host": "203.0.113.10", "origin_port": 8080},
+            headers=admin_headers,
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["origin_health_status"] == "healthy"
+    assert data["origin_health_status_code"] == 302
+    assert data["origin_health_latency_ms"] == 87
+    assert data["origin_health_error"] is None
+    assert data["origin_health_checked_at"] is not None
+
+
+@pytest.mark.asyncio
+async def test_set_origin_probe_failure_does_not_block_save(client, admin_headers):
+    """Arcus should save the origin even when the health probe fails."""
+    from api.utils.origin_health import OriginHealthSnapshot
+
+    user_id = await _setup_user_with_credits(client, admin_headers, "healthfail@example.com")
+    await client.post("/subdomains/purchase", json={"user_id": user_id, "slug": "healthfail"}, headers=admin_headers)
+
+    snapshot = OriginHealthSnapshot(
+        status="unreachable",
+        checked_at=datetime(2026, 3, 15, 11, 45, tzinfo=UTC),
+        status_code=None,
+        latency_ms=5000,
+        error="timed out connecting to origin",
+    )
+
+    with patch("api.routes.subdomains.probe_origin", AsyncMock(return_value=snapshot)):
+        resp = await client.post(
+            "/subdomains/healthfail/origin",
+            json={"origin_host": "203.0.113.20", "origin_port": 3000},
+            headers=admin_headers,
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["origin_host"] == "203.0.113.20"
+    assert data["origin_port"] == 3000
+    assert data["origin_health_status"] == "unreachable"
+    assert data["origin_health_status_code"] is None
+    assert data["origin_health_latency_ms"] == 5000
+    assert data["origin_health_error"] == "timed out connecting to origin"
+
+
+@pytest.mark.asyncio
+async def test_manual_origin_check_refreshes_snapshot(client, admin_headers):
+    """Manual checks should refresh the stored health snapshot for a saved origin."""
+    from api.utils.origin_health import OriginHealthSnapshot
+
+    user_id = await _setup_user_with_credits(client, admin_headers, "healthrecheck@example.com")
+    await client.post(
+        "/subdomains/purchase",
+        json={"user_id": user_id, "slug": "healthrecheck"},
+        headers=admin_headers,
+    )
+
+    initial = OriginHealthSnapshot(
+        status="unreachable",
+        checked_at=datetime(2026, 3, 15, 12, 0, tzinfo=UTC),
+        status_code=None,
+        latency_ms=5000,
+        error="connection refused",
+    )
+    refreshed = OriginHealthSnapshot(
+        status="healthy",
+        checked_at=datetime(2026, 3, 15, 12, 5, tzinfo=UTC),
+        status_code=200,
+        latency_ms=41,
+        error=None,
+    )
+
+    with patch("api.routes.subdomains.probe_origin", AsyncMock(side_effect=[initial, refreshed])):
+        save_resp = await client.post(
+            "/subdomains/healthrecheck/origin",
+            json={"origin_host": "203.0.113.30", "origin_port": 8081},
+            headers=admin_headers,
+        )
+        assert save_resp.status_code == 200
+
+        check_resp = await client.post("/subdomains/healthrecheck/origin/check", headers=admin_headers)
+
+    assert check_resp.status_code == 200
+    data = check_resp.json()
+    assert data["origin_health_status"] == "healthy"
+    assert data["origin_health_status_code"] == 200
+    assert data["origin_health_latency_ms"] == 41
+    assert data["origin_health_error"] is None
+
+
+@pytest.mark.asyncio
+async def test_manual_origin_check_requires_existing_origin(client, admin_headers):
+    """Manual origin checks should fail when the subdomain has no saved origin."""
+    user_id = await _setup_user_with_credits(client, admin_headers, "healthmissing@example.com")
+    await client.post(
+        "/subdomains/purchase",
+        json={"user_id": user_id, "slug": "healthmissing"},
+        headers=admin_headers,
+    )
+
+    resp = await client.post("/subdomains/healthmissing/origin/check", headers=admin_headers)
+
+    assert resp.status_code == 409
+    assert "origin" in resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_manual_origin_check_forbidden_for_non_owner(client, admin_headers, normal_user):
+    """Non-owners should not be able to manually re-check another user's origin."""
+    from api.utils.origin_health import OriginHealthSnapshot
+
+    owner_id = await _setup_user_with_credits(client, admin_headers, "healthowner@example.com")
+    await client.post(
+        "/subdomains/purchase",
+        json={"user_id": owner_id, "slug": "healthowner"},
+        headers=admin_headers,
+    )
+
+    snapshot = OriginHealthSnapshot(
+        status="healthy",
+        checked_at=datetime(2026, 3, 15, 12, 10, tzinfo=UTC),
+        status_code=200,
+        latency_ms=22,
+        error=None,
+    )
+
+    with patch("api.routes.subdomains.probe_origin", AsyncMock(return_value=snapshot)):
+        save_resp = await client.post(
+            "/subdomains/healthowner/origin",
+            json={"origin_host": "203.0.113.40", "origin_port": 8082},
+            headers=admin_headers,
+        )
+        assert save_resp.status_code == 200
+
+    resp = await client.post("/subdomains/healthowner/origin/check", headers=normal_user["headers"])
+
+    assert resp.status_code == 403
 
 
 # ---------------------------------------------------------------------------

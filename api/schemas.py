@@ -152,6 +152,11 @@ class SubdomainResponse(BaseModel):
     slug: str
     origin_host: str | None
     origin_port: int | None
+    origin_health_status: Literal["unknown", "healthy", "unreachable"] | None = None
+    origin_health_checked_at: datetime | None = None
+    origin_health_status_code: int | None = None
+    origin_health_latency_ms: int | None = None
+    origin_health_error: str | None = None
     active: bool
     created_at: datetime
 
